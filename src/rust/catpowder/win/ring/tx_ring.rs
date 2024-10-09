@@ -47,7 +47,7 @@ impl TxRing {
         socket.setsockopt(
             api,
             libxdp::XSK_SOCKOPT_UMEM_REG,
-            mem.borrow().as_ref() as *const libxdp::XSK_UMEM_REG as *const core::ffi::c_void,
+            mem.borrow().as_ref(),
             std::mem::size_of::<libxdp::XSK_UMEM_REG>() as u32,
         )?;
 
@@ -56,7 +56,7 @@ impl TxRing {
         socket.setsockopt(
             api,
             libxdp::XSK_SOCKOPT_TX_RING_SIZE,
-            &length as *const u32 as *const core::ffi::c_void,
+            &length,
             std::mem::size_of::<u32>() as u32,
         )?;
 
@@ -65,7 +65,7 @@ impl TxRing {
         socket.setsockopt(
             api,
             libxdp::XSK_SOCKOPT_TX_COMPLETION_RING_SIZE,
-            &length as *const u32 as *const core::ffi::c_void,
+            &length,
             std::mem::size_of::<u32>() as u32,
         )?;
 
@@ -81,12 +81,7 @@ impl TxRing {
         trace!("retrieving tx ring info");
         let mut ring_info: libxdp::XSK_RING_INFO_SET = unsafe { std::mem::zeroed() };
         let mut option_length: u32 = std::mem::size_of::<libxdp::XSK_RING_INFO_SET>() as u32;
-        socket.getsockopt(
-            api,
-            libxdp::XSK_SOCKOPT_RING_INFO,
-            &mut ring_info as *mut libxdp::XSK_RING_INFO_SET as *mut core::ffi::c_void,
-            &mut option_length as *mut u32,
-        )?;
+        socket.getsockopt(api, libxdp::XSK_SOCKOPT_RING_INFO, &mut ring_info, &mut option_length)?;
 
         // Initialize tx and tx completion rings.
         let tx_ring: XdpRing = XdpRing::new(&ring_info.Tx);

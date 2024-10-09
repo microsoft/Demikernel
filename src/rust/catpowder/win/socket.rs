@@ -50,6 +50,8 @@ impl XdpSocket {
     pub fn bind(&self, api: &mut XdpApi, ifindex: u32, queueid: u32, flags: i32) -> Result<(), Fail> {
         let api: libxdp::XDP_API_TABLE = api.get();
 
+        trace!("bind(): ifindex={}, queueid={}, flags={}", ifindex, queueid, flags);
+
         if let Some(bind) = api.XskBind {
             let result: HRESULT = unsafe { bind(self.0, ifindex, queueid, flags) };
             let error: windows::core::Error = windows::core::Error::from_hresult(result);
@@ -68,17 +70,16 @@ impl XdpSocket {
     }
 
     /// Set options in the target socket.
-    pub fn setsockopt(
-        &mut self,
-        api: &mut XdpApi,
-        opt: u32,
-        val: *const std::ffi::c_void,
-        len: u32,
-    ) -> Result<(), Fail> {
+    pub fn setsockopt<T>(&mut self, api: &mut XdpApi, opt: u32, val: &T, len: u32) -> Result<(), Fail>
+    where
+        T: std::fmt::Debug,
+    {
         let api: libxdp::XDP_API_TABLE = api.get();
 
+        trace!("setsockopt(): opt={}, val={:?}, len={}", opt, val, len);
+
         if let Some(setsocket) = api.XskSetSockopt {
-            let result: HRESULT = unsafe { setsocket(self.0, opt, val, len) };
+            let result: HRESULT = unsafe { setsocket(self.0, opt, val as *const T as *const libc::c_void, len) };
             let error: windows::core::Error = windows::core::Error::from_hresult(result);
             match error.code().is_ok() {
                 true => Ok(()),
@@ -92,20 +93,23 @@ impl XdpSocket {
     }
 
     /// Get options from the target socket.
-    pub fn getsockopt(
-        &self,
-        api: &mut XdpApi,
-        opt: u32,
-        val: *mut std::ffi::c_void,
-        len: *mut u32,
-    ) -> Result<(), Fail> {
+    pub fn getsockopt<T>(&self, api: &mut XdpApi, opt: u32, val: &mut T, len: &mut u32) -> Result<(), Fail>
+    where
+        T: std::fmt::Debug,
+    {
         let api: libxdp::XDP_API_TABLE = api.get();
 
+        let val_ptr: *mut libc::c_void = val as *mut T as *mut libc::c_void;
+        trace!("getsockopt(): opt={}, val={:?}, len={}", opt, val_ptr, *len);
+
         if let Some(getsockopt) = api.XskGetSockopt {
-            let result: HRESULT = unsafe { getsockopt(self.0, opt, val, len) };
+            let result: HRESULT = unsafe { getsockopt(self.0, opt, val_ptr, len as *mut u32) };
             let error: windows::core::Error = windows::core::Error::from_hresult(result);
             match error.code().is_ok() {
-                true => Ok(()),
+                true => {
+                    trace!("getsockopt(): val={:?}", val);
+                    Ok(())
+                },
                 false => return Err(Fail::from(&error)),
             }
         } else {
@@ -118,6 +122,8 @@ impl XdpSocket {
     /// Activate the target socket.
     pub fn activate(&self, api: &mut XdpApi, flags: i32) -> Result<(), Fail> {
         let api: libxdp::XDP_API_TABLE = api.get();
+
+        trace!("activate(): flags={}", flags);
 
         if let Some(activate) = api.XskActivate {
             let result: HRESULT = unsafe { activate(self.0, flags) };
@@ -142,6 +148,8 @@ impl XdpSocket {
         result: *mut libxdp::XSK_NOTIFY_RESULT_FLAGS,
     ) -> Result<(), Fail> {
         let api: libxdp::XDP_API_TABLE = api.get();
+
+        trace!("notify(): flags={}, timeout={}", flags, timeout);
 
         if let Some(notify) = api.XskNotifySocket {
             let result: HRESULT = unsafe { notify(self.0, flags, timeout, result) };

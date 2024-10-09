@@ -40,6 +40,15 @@ impl XdpProgram {
         let rule_count: u32 = rules.len() as u32;
         let mut handle: HANDLE = HANDLE::default();
 
+        trace!(
+            "new(): rules={:?}, ifindex={}, hookid={:?}, queueid={}, flags={}",
+            rules,
+            ifindex,
+            hookid,
+            queueid,
+            flags
+        );
+
         // Attempt to create the XDP program.
         if let Some(create_program) = api.get().XdpCreateProgram {
             let result: HRESULT = unsafe {
