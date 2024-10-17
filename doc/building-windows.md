@@ -79,3 +79,5 @@ nmake all
 # Build Demikernel in debug mode with the default configuration.
 nmake DEBUG=yes all
 ```
+
+Alternatively, you can also run `cargo build` in the root directory. (after which you may run `cargo build --examples` to build examples)

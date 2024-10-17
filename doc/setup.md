@@ -56,10 +56,10 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 - Copy the template from `scripts/config/default.yaml` to
   `$HOME/config.yaml`. If running on Azure, use `scripts/config/azure.yaml`.
 - Open the file in `$HOME/config.yaml` for editing and do the following:
-  - Change `XX.XX.XX.XX` to match the IPv4 address that in the local host.
-  - Change `ff:ff:ff:ff:ff:ff` to match the MAC address in the local host.
-  - Change `abcde` to match the name of the interface in the local host.
-  - Change the `arp_table` according to your setup. Each line should contain the MAC address of a host matched to the IP address of the same host.
+  - Change `XX.XX.XX.XX` to match the IPv4 address that in the local host. (for example, 127.0.0.1 if you are running local-to-local tests on your dev machine)
+  - Change `ff:ff:ff:ff:ff:ff` to match the MAC address in the local host. (optional if you are running local-to-local test)
+  - Change `abcde` to match the name of the interface in the local host. (optional if you are running local-to-local test)
+  - Change the `arp_table` according to your setup. Each line should contain the MAC address of a host matched to the IP address of the same host. (optional if you are running local-to-local test)
   - If using DPDK, change `WW:WW.W` to match the PCIe address of your NIC.
 - Save the file.
 
