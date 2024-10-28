@@ -67,21 +67,10 @@ impl SharedCatpowderRuntime {
         // Open TX and RX rings
         let tx: TxRing = TxRing::new(&mut api, Self::RING_LENGTH, ifindex, 0)?;
 
-        let sys_proc_count: usize = count_processor_cores()?;
-        let mut rx_rings: Vec<RxRing> = Vec::with_capacity(sys_proc_count);
-        rx_rings.push(RxRing::new(&mut api, Self::RING_LENGTH, ifindex, 0)?);
-        for queueid in 1..sys_proc_count {
-            match RxRing::new(&mut api, Self::RING_LENGTH, ifindex, queueid as u32) {
-                Ok(rx) => rx_rings.push(rx),
-                Err(e) => {
-                    warn!(
-                        "Failed to create RX ring on queue {}: {:?}. This is only an error if {} is a valid RSS queue \
-                         ID",
-                        queueid, queueid, e
-                    );
-                    break;
-                },
-            }
+        let queue_count: u32 = deduce_rss_settings(&mut api, ifindex)?;
+        let mut rx_rings: Vec<RxRing> = Vec::with_capacity(queue_count as usize);
+        for queueid in 0..queue_count {
+            rx_rings.push(RxRing::new(&mut api, Self::RING_LENGTH, ifindex, queueid as u32)?);
         }
         trace!("Created {} RX rings.", rx_rings.len());
 
@@ -226,6 +215,30 @@ fn count_processor_cores() -> Result<usize, Fail> {
     }
 
     return Ok(core_count);
+}
+
+/// Deduces the RSS settings for the given interface. Returns the number of valid RSS queues for the interface.
+fn deduce_rss_settings(api: &mut XdpApi, ifindex: u32) -> Result<u32, Fail> {
+    const DUMMY_QUEUE_LENGTH: u32 = 1;
+    let sys_proc_count: u32 = count_processor_cores()? as u32;
+
+    // NB there will always be at least one queue available, hence starting the loop at 1. There should not be more
+    // queues than the number of processors on the system.
+    for queueid in 1..sys_proc_count {
+        match TxRing::new(api, DUMMY_QUEUE_LENGTH, ifindex, queueid) {
+            Ok(_) => (),
+            Err(e) => {
+                warn!(
+                    "Failed to create TX ring on queue {}: {:?}. This is only an error if {} is a valid RSS queue \
+                     ID",
+                    queueid, e, queueid
+                );
+                return Ok(queueid);
+            },
+        }
+    }
+
+    Ok(sys_proc_count)
 }
 
 //======================================================================================================================
