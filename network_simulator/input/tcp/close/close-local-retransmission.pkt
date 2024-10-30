@@ -32,6 +32,9 @@
 // Receive ACK on data packet.
 +.1 TCP < . seq 1(0) ack 1001 win 65535 <nop>
 
+// Send FIN again since no ack on it yet.
++.0 TCP > F. seq 1001(0) ack 1 win 65535 <nop>
+
 // Send completes
 +.0 wait(500, ...) = 9
 

@@ -224,11 +224,8 @@ impl SharedTcpSocket {
         // Send synchronously.
         match self.state {
             SocketState::Established(ref mut socket) => {
-                let size: usize = buf.len();
-                // Send the packet.
-                socket.send(buf)?;
                 // Wait for ack.
-                socket.push(size).await
+                socket.push(buf).await
             },
             _ => unreachable!("State machine check should ensure that this socket is connected"),
         }

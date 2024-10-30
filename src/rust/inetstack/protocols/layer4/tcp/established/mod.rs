@@ -104,12 +104,8 @@ impl EstablishedSocket {
         self.recv_queue.clone()
     }
 
-    pub fn send(&mut self, buf: DemiBuffer) -> Result<(), Fail> {
-        self.cb.send(buf)
-    }
-
-    pub async fn push(&mut self, nbytes: usize) -> Result<(), Fail> {
-        self.cb.push(nbytes).await
+    pub async fn push(&mut self, buf: DemiBuffer) -> Result<(), Fail> {
+        self.cb.push(buf).await
     }
 
     pub async fn pop(&mut self, size: Option<usize>) -> Result<DemiBuffer, Fail> {
