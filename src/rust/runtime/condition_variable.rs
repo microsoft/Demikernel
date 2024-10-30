@@ -18,14 +18,14 @@ use ::std::{
 // Structures
 //======================================================================================================================
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone, Copy)]
 /// The state of the coroutine using this condition variable.
 enum YieldState {
     Running,
     Yielded,
 }
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 struct YieldPointId(u64);
 
 /// This data structure implements single result that can be asynchronously waited on and is hooked into the Demikernel
@@ -131,16 +131,21 @@ impl Future for YieldPoint {
     /// The first time that this future is polled, it is not ready but the next time must be a signal so then it is
     /// ready.
     fn poll(self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
+        let state: YieldState = self.state;
+        let num_ready: usize = self.cond_var.num_ready;
         let self_: &mut Self = self.get_mut();
-        if self_.cond_var.num_ready > 0 {
-            self_.cond_var.num_ready -= 1;
-            Poll::Ready(())
-        } else {
-            if self_.state == YieldState::Running {
+        match state {
+            YieldState::Running => {
                 self_.cond_var.add_waiter(self_.id, context.waker().clone());
-            }
-            self_.state = YieldState::Yielded;
-            Poll::Pending
+                self_.state = YieldState::Yielded;
+                Poll::Pending
+            },
+            YieldState::Yielded if num_ready > 0 => {
+                self_.cond_var.num_ready -= 1;
+                self_.state = YieldState::Running;
+                return Poll::Ready(());
+            },
+            _ => Poll::Pending,
         }
     }
 }
