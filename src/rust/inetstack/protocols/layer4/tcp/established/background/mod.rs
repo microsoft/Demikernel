@@ -25,11 +25,6 @@ pub async fn background(cb: SharedControlBlock, _dead_socket_tx: mpsc::Unbounded
     let receiver = async_timer!("tcp::established::background::receiver", cb2.poll()).fuse();
     pin_mut!(receiver);
 
-    let r = futures::select_biased! {
-        r = receiver => r,
-        r = acknowledger => r,
-        r = retransmitter => r,
-        r = sender => r,
-    };
+    let r = futures::join!(receiver, acknowledger, retransmitter, sender);
     error!("Connection terminated: {:?}", r);
 }
