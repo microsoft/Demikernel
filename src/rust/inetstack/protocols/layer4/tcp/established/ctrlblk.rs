@@ -243,10 +243,6 @@ pub struct ControlBlock {
     // TODO: Consider switching this to a static implementation to avoid V-table call overhead.
     congestion_control_algorithm: Box<dyn congestion_control::CongestionControl>,
 
-    // This data structure stores the number of bytes acked for each outgoing frame.
-    // TODO: Change this to a single number for SND.UNA
-    receive_ack_queue_frame_bytes: SharedAsyncQueue<usize>,
-
     // This queue notifies the parent passive socket that created the socket that the socket is closing. This is /
     // necessary because routing for this socket goes through the parent socket if the connection set up is still
     // inflight (but also after the connection is established for some reason).
@@ -278,7 +274,6 @@ impl SharedControlBlock {
         congestion_control_algorithm_constructor: CongestionControlConstructor,
         congestion_control_options: Option<congestion_control::Options>,
         recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>,
-        receive_ack_queue_frame_bytes: SharedAsyncQueue<usize>,
         parent_passive_socket_close_queue: Option<SharedAsyncQueue<SocketAddrV4>>,
     ) -> Self {
         let sender: Sender = Sender::new(
@@ -308,7 +303,6 @@ impl SharedControlBlock {
                 congestion_control_options,
             ),
             recv_queue,
-            receive_ack_queue_frame_bytes,
             parent_passive_socket_close_queue,
         }))
     }
@@ -667,8 +661,6 @@ impl SharedControlBlock {
             // processing and now without a call to advance_clock.
             let now: Instant = self.get_now();
             self.sender.process_ack(header, now);
-            let nbytes: usize = Into::<u32>::into(header.ack_num - send_unacknowledged) as usize;
-            self.receive_ack_queue_frame_bytes.push(nbytes)
         } else {
             // This segment acknowledges data we have yet to send!?  Send an ACK and drop the segment.
             // TODO: See RFC 5961, this could be a Blind Data Injection Attack.
