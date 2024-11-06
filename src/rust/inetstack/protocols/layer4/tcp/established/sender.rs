@@ -131,7 +131,7 @@ impl Sender {
     }
 
     // This function sends a packet and waits for it to be acked.
-    pub async fn push(&mut self, buf: DemiBuffer) -> Result<(), Fail> {
+    pub async fn push(&mut self, mut buf: DemiBuffer, mut cb: SharedControlBlock) -> Result<(), Fail> {
         // If the user is done sending (i.e. has called close on this connection), then they shouldn't be sending.
         debug_assert!(self.fin_seq_no.is_none());
         // Our API supports send buffers up to usize (variable, depends upon architecture) in size.  While we could
@@ -153,7 +153,12 @@ impl Sender {
 
         // Place the buffer in the unsent queue.
         self.unsent_next_seq_no = self.unsent_next_seq_no + (buf.len() as u32).into();
-        self.unsent_queue.push(Some(buf));
+        if self.send_window.get() > 0 {
+            self.send_segment(&mut buf, &mut cb);
+        }
+        if buf.len() > 0 {
+            self.unsent_queue.push(Some(buf));
+        }
 
         // Wait until the sequnce number of the pushed buffer is acknowledged.
         let mut send_unacked_watched: SharedAsyncValue<SeqNumber> = self.send_unacked.clone();
