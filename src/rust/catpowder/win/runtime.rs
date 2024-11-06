@@ -44,6 +44,7 @@ struct CatpowderRuntimeInner {
     api: XdpApi,
     tx: TxRing,
     rx_rings: Vec<RxRing>,
+    vf_rx_rings: Vec<RxRing>,
 }
 //======================================================================================================================
 // Implementations
@@ -60,6 +61,7 @@ impl SharedCatpowderRuntime {
     /// Instantiates a new XDP runtime.
     pub fn new(config: &Config) -> Result<Self, Fail> {
         let ifindex: u32 = config.local_interface_index()?;
+        let vf_if_index = config.local_vf_interface_index(); // N.B. this one is optional
 
         trace!("Creating XDP runtime.");
         let mut api: XdpApi = XdpApi::new()?;
@@ -72,9 +74,30 @@ impl SharedCatpowderRuntime {
         for queueid in 0..queue_count {
             rx_rings.push(RxRing::new(&mut api, Self::RING_LENGTH, ifindex, queueid as u32)?);
         }
-        trace!("Created {} RX rings.", rx_rings.len());
+        trace!("Created {} RX rings on interface {}", rx_rings.len(), ifindex);
 
-        Ok(Self(SharedObject::new(CatpowderRuntimeInner { api, tx, rx_rings })))
+        if let Ok(vf_if_index) = vf_if_index { // Optionally create VF RX rings
+            let vf_queue_count = deduce_rss_settings(&mut api, vf_if_index)?;
+            let mut vf_rx_rings = Vec::with_capacity(vf_queue_count as usize);
+            for queueid in 0..vf_queue_count {
+                vf_rx_rings.push(RxRing::new(&mut api, Self::RING_LENGTH, vf_if_index, queueid as u32)?);
+            }
+            trace!("Created {} RX rings on VF interface {}.", vf_rx_rings.len(), vf_if_index);
+
+            Ok(Self(SharedObject::new(CatpowderRuntimeInner {
+                api,
+                tx,
+                rx_rings,
+                vf_rx_rings,
+            })))
+        } else {
+            Ok(Self(SharedObject::new(CatpowderRuntimeInner {
+                api,
+                tx,
+                rx_rings,
+                vf_rx_rings: Vec::new(),
+            })))
+        }
     }
 }
 
@@ -135,6 +158,25 @@ impl PhysicalLayer for SharedCatpowderRuntime {
         let mut idx: u32 = 0;
 
         for rx in self.0.borrow_mut().rx_rings.iter_mut() {
+            if rx.reserve_rx(Self::RING_LENGTH, &mut idx) == Self::RING_LENGTH {
+                let xdp_buffer: XdpBuffer = rx.get_buffer(idx);
+                let dbuf: DemiBuffer = DemiBuffer::from_slice(&*xdp_buffer)?;
+                rx.release_rx(Self::RING_LENGTH);
+
+                ret.push(dbuf);
+
+                rx.reserve_rx_fill(Self::RING_LENGTH, &mut idx);
+                // NB for now there is only ever one element in the fill ring, so we don't have to
+                // change the ring contents.
+                rx.submit_rx_fill(Self::RING_LENGTH);
+
+                if ret.is_full() {
+                    break;
+                }
+            }
+        }
+
+        for rx in self.0.borrow_mut().vf_rx_rings.iter_mut() {
             if rx.reserve_rx(Self::RING_LENGTH, &mut idx) == Self::RING_LENGTH {
                 let xdp_buffer: XdpBuffer = rx.get_buffer(idx);
                 let dbuf: DemiBuffer = DemiBuffer::from_slice(&*xdp_buffer)?;
