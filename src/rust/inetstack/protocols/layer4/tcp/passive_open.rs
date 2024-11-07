@@ -219,10 +219,9 @@ impl SharedPassiveSocket {
         // Allocate a new coroutine to send the SYN+ACK and retry if necessary.
         let recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)> =
             SharedAsyncQueue::<(Ipv4Addr, TcpHeader, DemiBuffer)>::default();
-        let ack_queue: SharedAsyncQueue<usize> = SharedAsyncQueue::<usize>::default();
         let future = self
             .clone()
-            .send_syn_ack_and_wait_for_ack(remote, remote_isn, local_isn, tcp_hdr, recv_queue.clone(), ack_queue)
+            .send_syn_ack_and_wait_for_ack(remote, remote_isn, local_isn, tcp_hdr, recv_queue.clone())
             .fuse();
         match self
             .runtime
@@ -291,7 +290,6 @@ impl SharedPassiveSocket {
         local_isn: SeqNumber,
         tcp_hdr: TcpHeader,
         recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>,
-        ack_queue: SharedAsyncQueue<usize>,
     ) {
         // Set up new inflight accept connection.
         let mut remote_window_scale = None;
@@ -325,7 +323,6 @@ impl SharedPassiveSocket {
             // Wait for ACK in response.
             let ack = self.clone().wait_for_ack(
                 recv_queue.clone(),
-                ack_queue.clone(),
                 remote,
                 local_isn,
                 remote_isn,
@@ -395,7 +392,6 @@ impl SharedPassiveSocket {
     async fn wait_for_ack(
         self,
         mut recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>,
-        ack_queue: SharedAsyncQueue<usize>,
         remote: SocketAddrV4,
         local_isn: SeqNumber,
         remote_isn: SeqNumber,
@@ -460,7 +456,6 @@ impl SharedPassiveSocket {
             self.runtime.clone(),
             self.layer3_endpoint.clone(),
             recv_queue.clone(),
-            ack_queue,
             self.tcp_config.clone(),
             self.socket_options,
             remote_isn + SeqNumber::from(1),

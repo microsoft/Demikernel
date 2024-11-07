@@ -199,7 +199,6 @@ impl SharedTcpSocket {
     ) -> Result<(), Fail> {
         let recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)> =
             SharedAsyncQueue::<(Ipv4Addr, TcpHeader, DemiBuffer)>::default();
-        let ack_queue: SharedAsyncQueue<usize> = SharedAsyncQueue::<usize>::default();
         // Create active socket.
         let socket: SharedActiveOpenSocket = SharedActiveOpenSocket::new(
             local_isn,
@@ -208,7 +207,6 @@ impl SharedTcpSocket {
             self.runtime.clone(),
             self.layer3_endpoint.clone(),
             recv_queue.clone(),
-            ack_queue,
             self.tcp_config.clone(),
             self.socket_options.clone(),
             self.dead_socket_tx.clone(),

@@ -50,7 +50,6 @@ impl EstablishedSocket {
         mut runtime: SharedDemiRuntime,
         layer3_endpoint: SharedLayer3Endpoint,
         recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>,
-        ack_queue: SharedAsyncQueue<usize>,
         tcp_config: TcpConfig,
         default_socket_options: TcpSocketOptions,
         receiver_seq_no: SeqNumber,
@@ -85,7 +84,6 @@ impl EstablishedSocket {
             cc_constructor,
             congestion_control_options,
             recv_queue.clone(),
-            ack_queue.clone(),
             socket_queue,
         );
         let qt: QToken = runtime.insert_background_coroutine(
