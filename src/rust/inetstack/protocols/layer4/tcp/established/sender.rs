@@ -13,11 +13,12 @@ use crate::{
 use ::futures::{pin_mut, select_biased, FutureExt};
 use ::libc::{EBUSY, EINVAL};
 use ::std::{
+    cmp,
+    collections::VecDeque,
     fmt,
     time::{Duration, Instant},
 };
 use futures::never::Never;
-use std::cmp;
 
 // Structure of entries on our unacknowledged queue.
 // TODO: We currently allocate these on the fly when we add a buffer to the queue.  Would be more efficient to have a
@@ -62,7 +63,7 @@ pub struct Sender {
     send_unacked: SharedAsyncValue<SeqNumber>,
 
     // Queue of unacknowledged sent data.  RFC 793 calls this the "retransmission queue".
-    unacked_queue: SharedAsyncQueue<UnackedSegment>,
+    unacked_queue: VecDeque<UnackedSegment>,
 
     // Send timers
     // Current retransmission timer expiration time.
@@ -115,7 +116,7 @@ impl Sender {
     pub fn new(seq_no: SeqNumber, send_window: u32, send_window_scale_shift_bits: u8, mss: usize) -> Self {
         Self {
             send_unacked: SharedAsyncValue::new(seq_no),
-            unacked_queue: SharedAsyncQueue::with_capacity(MIN_UNACKED_QUEUE_SIZE_FRAMES),
+            unacked_queue: VecDeque::with_capacity(MIN_UNACKED_QUEUE_SIZE_FRAMES),
             retransmit_deadline_time_secs: SharedAsyncValue::new(None),
             rto_calculator: RtoCalculator::new(),
             send_next_seq_no: SharedAsyncValue::new(seq_no),
@@ -217,7 +218,7 @@ impl Sender {
             bytes: None,
             initial_tx: Some(cb.get_now()),
         };
-        self.unacked_queue.push(unacked_segment);
+        self.unacked_queue.push_back(unacked_segment);
         // Set the retransmit timer.
         if self.retransmit_deadline_time_secs.get().is_none() {
             let rto: Duration = self.rto_calculator.rto();
@@ -274,7 +275,7 @@ impl Sender {
             bytes: Some(probe.clone()),
             initial_tx: Some(cb.get_now()),
         };
-        self.unacked_queue.push(unacked_segment);
+        self.unacked_queue.push_back(unacked_segment);
 
         // Note that we loop here *forever*, exponentially backing off.
         // TODO: Use the correct PERSIST mode timer here.
@@ -343,7 +344,7 @@ impl Sender {
             bytes: Some(segment_data),
             initial_tx: Some(cb.get_now()),
         };
-        self.unacked_queue.push(unacked_segment);
+        self.unacked_queue.push_back(unacked_segment);
 
         // Set the retransmit timer.
         if self.retransmit_deadline_time_secs.get().is_none() {
@@ -447,7 +448,7 @@ impl Sender {
 
     /// Retransmits the earliest segment that has not (yet) been acknowledged by our peer.
     pub fn retransmit(&mut self, cb: &mut SharedControlBlock) {
-        match self.unacked_queue.get_front_mut() {
+        match self.unacked_queue.front_mut() {
             Some(segment) => {
                 // We're retransmitting this, so we can no longer use an ACK for it as an RTT measurement (as we can't
                 // tell if the ACK is for the original or the retransmission).  Remove the transmission timestamp from
@@ -490,7 +491,7 @@ impl Sender {
             let mut bytes_remaining: usize = bytes_acknowledged as usize;
             // Remove bytes from the unacked queue.
             while bytes_remaining != 0 {
-                bytes_remaining = match self.unacked_queue.try_pop() {
+                bytes_remaining = match self.unacked_queue.pop_front() {
                     Some(segment) if segment.bytes.is_none() => self.process_acked_fin(bytes_remaining, header.ack_num),
                     Some(segment) => self.process_acked_segment(bytes_remaining, segment, now),
                     None => {
@@ -565,7 +566,7 @@ impl Sender {
     }
 
     fn update_retransmit_deadline(&self, now: Instant) -> Option<Instant> {
-        match self.unacked_queue.get_front() {
+        match self.unacked_queue.front() {
             Some(UnackedSegment {
                 bytes: _,
                 initial_tx: Some(initial_tx),
