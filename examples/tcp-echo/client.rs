@@ -42,7 +42,7 @@ pub struct TcpEchoClient {
     libos: LibOS,
     /// Buffer size.
     bufsize: usize,
-    /// Number of packets echoed back.
+    /// Number of packets echoed back since last log period.
     nechoed: usize,
     /// Number of bytes transferred.
     nbytes: usize,
@@ -131,17 +131,16 @@ impl TcpEchoClient {
             if let Some(log_interval) = log_interval {
                 if last_log.elapsed() > Duration::from_secs(log_interval) {
                     let time_elapsed: f64 = (Instant::now() - last_log).as_secs() as f64;
-                    let nrequests: f64 = (self.nbytes / self.bufsize) as f64;
-                    let rps: f64 = nrequests / time_elapsed;
+                    let rps: f64 = self.nechoed as f64 / time_elapsed;
                     println!(
                         "INFO: {:?} requests, {:2?} rps, p50 {:?} ns, p99 {:?} ns",
-                        nrequests,
+                        self.nechoed,
                         rps,
                         self.stats.percentile(0.50)?.unwrap().start(),
                         self.stats.percentile(0.99)?.unwrap().start(),
                     );
                     last_log = Instant::now();
-                    self.nbytes = 0;
+                    self.nechoed = 0;
                 }
             }
 
@@ -230,17 +229,16 @@ impl TcpEchoClient {
             if let Some(log_interval) = log_interval {
                 if last_log.elapsed() > Duration::from_secs(log_interval) {
                     let time_elapsed: f64 = (Instant::now() - last_log).as_secs() as f64;
-                    let nrequests: f64 = (self.nbytes / self.bufsize) as f64;
-                    let rps: f64 = nrequests / time_elapsed;
+                    let rps: f64 = self.nechoed as f64 / time_elapsed;
                     println!(
                         "INFO: {:?} requests, {:2?} rps, p50 {:?} ns, p99 {:?} ns",
-                        nrequests,
+                        self.nechoed,
                         rps,
                         self.stats.percentile(0.50)?.unwrap().start(),
                         self.stats.percentile(0.99)?.unwrap().start(),
                     );
                     last_log = Instant::now();
-                    self.nbytes = 0;
+                    self.nechoed = 0;
                 }
             }
 
