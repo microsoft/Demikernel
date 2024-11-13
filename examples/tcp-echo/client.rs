@@ -54,8 +54,6 @@ pub struct TcpEchoClient {
     remote: SocketAddr,
     /// List of pending operations.
     qts: Vec<QToken>,
-    /// Reverse lookup table of pending operations.
-    qts_reverse: HashMap<QToken, QDesc>,
     /// Start time.
     start: Instant,
     /// Statistics.
@@ -77,7 +75,6 @@ impl TcpEchoClient {
             npushed: 0,
             clients: HashMap::default(),
             qts: Vec::default(),
-            qts_reverse: HashMap::default(),
             start: Instant::now(),
             stats: Histogram::new(7, 64)?,
         });
@@ -185,7 +182,7 @@ impl TcpEchoClient {
             // Set default linger to a short period, otherwise, this test will take a long time to complete.
 
             let qt: QToken = self.libos.connect(qd, self.remote)?;
-            self.register_operation(qd, qt);
+            self.register_operation(qt);
 
             // First client connects synchronously.
             if i == 0 {
@@ -391,7 +388,7 @@ impl TcpEchoClient {
     /// Issues a pop operation.
     fn issue_pop(&mut self, qd: QDesc, size: Option<usize>) -> Result<()> {
         let qt: QToken = self.libos.pop(qd, size)?;
-        self.register_operation(qd, qt);
+        self.register_operation(qt);
         Ok(())
     }
 
@@ -399,7 +396,7 @@ impl TcpEchoClient {
     fn issue_push(&mut self, qd: QDesc) -> Result<()> {
         let sga: demi_sgarray_t = self.mksga(self.bufsize)?;
         let qt: QToken = self.libos.push(qd, &sga)?;
-        self.register_operation(qd, qt);
+        self.register_operation(qt);
         // Ok to immediately free because the push clones the reference and keeps it until the push completes.
         self.libos.sgafree(sga)?;
         Ok(())
@@ -407,8 +404,6 @@ impl TcpEchoClient {
 
     /// Handles a close operation.
     fn handle_close(&mut self, qd: QDesc) -> Result<()> {
-        let qts_drained: HashMap<QToken, QDesc> = self.qts_reverse.extract_if(|_k, v| v == &qd).collect();
-        let _: Vec<_> = self.qts.extract_if(|x| qts_drained.contains_key(x)).collect();
         self.clients.remove(&qd);
         self.libos.close(qd)?;
         println!("INFO: {} clients connected", self.clients.len());
@@ -416,17 +411,13 @@ impl TcpEchoClient {
     }
 
     // Registers an asynchronous I/O operation.
-    fn register_operation(&mut self, qd: QDesc, qt: QToken) {
-        self.qts_reverse.insert(qt, qd);
+    fn register_operation(&mut self, qt: QToken) {
         self.qts.push(qt);
     }
 
     // Unregisters an asynchronous I/O operation.
     fn unregister_operation(&mut self, index: usize) -> Result<()> {
-        let qt: QToken = self.qts.remove(index);
-        self.qts_reverse
-            .remove(&qt)
-            .ok_or(anyhow::anyhow!("unregistered queue token qt={:?}", qt))?;
+        let _: QToken = self.qts.remove(index);
         Ok(())
     }
 }
