@@ -13,6 +13,7 @@ use demikernel::{
         demi_opcode_t,
         demi_qresult_t,
     },
+    timer,
     LibOS,
     QDesc,
     QToken,
@@ -49,14 +50,9 @@ pub const SOCK_STREAM: i32 = libc::SOCK_STREAM;
 pub struct TcpEchoServer {
     /// Underlying libOS.
     libos: LibOS,
-    /// Local socket descriptor.
-    sockqd: QDesc,
-    /// Set of connected clients.
-    clients: HashSet<QDesc>,
-    /// List of pending operations.
-    qts: Vec<QToken>,
-    /// Reverse lookup table of pending operations.
-    qts_reverse: HashMap<QToken, QDesc>,
+    listening_sockqd: QDesc,
+    connected_clients: HashSet<QDesc>,
+    pending_qtokens: Vec<QToken>,
 }
 
 //======================================================================================================================
@@ -87,10 +83,9 @@ impl TcpEchoServer {
 
         return Ok(Self {
             libos,
-            sockqd,
-            clients: HashSet::default(),
-            qts: Vec::default(),
-            qts_reverse: HashMap::default(),
+            listening_sockqd,
+            connected_clients: HashSet::default(),
+            pending_qtokens: Vec::default(),
         });
     }
 
@@ -243,25 +238,20 @@ impl TcpEchoServer {
 
     /// Handles a close operation.
     fn handle_close(&mut self, qd: QDesc) -> Result<()> {
-        let qts_drained: HashMap<QToken, QDesc> = self.qts_reverse.extract_if(|_k, v| v == &qd).collect();
-        let _: Vec<_> = self.qts.extract_if(|x| qts_drained.contains_key(x)).collect();
-        self.clients.remove(&qd);
+        self.connected_clients.remove(&qd);
         self.libos.close(qd)?;
         Ok(())
     }
 
-    /// Registers an asynchronous I/O operation.
-    fn register_operation(&mut self, qd: QDesc, qt: QToken) {
-        self.qts_reverse.insert(qt, qd);
-        self.qts.push(qt);
+    fn register_operation(&mut self, _: QDesc, qt: QToken) {
+        timer!("register");
+        self.pending_qtokens.push(qt);
     }
 
     /// Unregisters an asynchronous I/O operation.
     fn unregister_operation(&mut self, index: usize) -> Result<()> {
-        let qt: QToken = self.qts.remove(index);
-        self.qts_reverse
-            .remove(&qt)
-            .ok_or(anyhow::anyhow!("unregistered queue token"))?;
+        timer!("unregister");
+        let _: QToken = self.pending_qtokens.remove(index);
         Ok(())
     }
 }

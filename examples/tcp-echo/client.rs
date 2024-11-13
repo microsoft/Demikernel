@@ -62,8 +62,6 @@ pub struct TcpEchoClient {
     remote: SocketAddr,
     /// List of pending operations.
     qts: Vec<QToken>,
-    /// Reverse lookup table of pending operations.
-    qts_reverse: HashMap<QToken, QDesc>,
     /// Start time.
     start: Instant,
     /// Statistics.
@@ -86,7 +84,6 @@ impl TcpEchoClient {
             npushed: 0,
             clients: HashMap::default(),
             qts: Vec::default(),
-            qts_reverse: HashMap::default(),
             start: Instant::now(),
             stats: Histogram::new(7, 64)?,
         });
@@ -418,8 +415,6 @@ impl TcpEchoClient {
 
     /// Handles a close operation.
     fn handle_close(&mut self, qd: QDesc) -> Result<()> {
-        let qts_drained: HashMap<QToken, QDesc> = self.qts_reverse.extract_if(|_k, v| v == &qd).collect();
-        let _: Vec<_> = self.qts.extract_if(|x| qts_drained.contains_key(x)).collect();
         self.clients.remove(&qd);
         self.libos.close(qd)?;
         println!("INFO: {} clients connected", self.clients.len());
@@ -427,17 +422,13 @@ impl TcpEchoClient {
     }
 
     // Registers an asynchronous I/O operation.
-    fn register_operation(&mut self, qd: QDesc, qt: QToken) {
-        self.qts_reverse.insert(qt, qd);
+    fn register_operation(&mut self, _: QDesc, qt: QToken) {
         self.qts.push(qt);
     }
 
     // Unregisters an asynchronous I/O operation.
     fn unregister_operation(&mut self, index: usize) -> Result<()> {
-        let qt: QToken = self.qts.remove(index);
-        self.qts_reverse
-            .remove(&qt)
-            .ok_or(anyhow::anyhow!("unregistered queue token qt={:?}", qt))?;
+        let _: QToken = self.qts.remove(index);
         Ok(())
     }
 }
