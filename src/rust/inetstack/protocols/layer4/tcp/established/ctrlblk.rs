@@ -802,7 +802,8 @@ impl SharedControlBlock {
     }
 
     pub async fn push(&mut self, buf: DemiBuffer) -> Result<(), Fail> {
-        self.sender.push(buf).await
+        let cb: Self = self.clone();
+        self.sender.push(buf, cb).await
     }
 
     pub async fn pop(&mut self, size: Option<usize>) -> Result<DemiBuffer, Fail> {
