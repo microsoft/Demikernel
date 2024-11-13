@@ -15,6 +15,12 @@ use ::std::{
 };
 
 //======================================================================================================================
+// Constant
+//======================================================================================================================
+
+const DEFAULT_WAITER_QUEUE_SIZE: usize = 64;
+
+//======================================================================================================================
 // Structures
 //======================================================================================================================
 
@@ -55,6 +61,7 @@ struct YieldPoint {
 
 impl SharedConditionVariable {
     /// Wake the next waiting coroutine.
+    #[inline]
     pub fn signal(&mut self) {
         if let Some((_, waiter)) = self.waiters.pop_front() {
             self.num_ready += 1;
@@ -62,11 +69,10 @@ impl SharedConditionVariable {
         }
     }
 
-    #[allow(unused)]
     /// Wake all waiting coroutines.
     pub fn broadcast(&mut self) {
-        while let Some((task_id, waiter)) = self.waiters.pop_front() {
-            self.num_ready += 1;
+        self.num_ready = self.num_ready + self.waiters.len();
+        for (_, waiter) in self.waiters.drain(..) {
             waiter.wake_by_ref();
         }
     }
@@ -104,7 +110,7 @@ impl SharedConditionVariable {
 impl Default for SharedConditionVariable {
     fn default() -> Self {
         Self(SharedObject::new(ConditionVariable {
-            waiters: VecDeque::default(),
+            waiters: VecDeque::with_capacity(DEFAULT_WAITER_QUEUE_SIZE),
             num_ready: 0,
             last_id: 0,
         }))

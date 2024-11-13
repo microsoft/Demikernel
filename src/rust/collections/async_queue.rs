@@ -14,6 +14,14 @@ use ::std::{
     ops::{Deref, DerefMut},
     time::Duration,
 };
+
+//======================================================================================================================
+// Constants
+//======================================================================================================================
+
+// The following value was chosen arbitrarily.
+const DEFAULT_QUEUE_SIZE: usize = 1024;
+
 //======================================================================================================================
 // Structures
 //======================================================================================================================
@@ -124,7 +132,7 @@ impl<T> SharedAsyncQueue<T> {
 impl<T> Default for AsyncQueue<T> {
     fn default() -> Self {
         Self {
-            queue: VecDeque::<T>::default(),
+            queue: VecDeque::<T>::with_capacity(DEFAULT_QUEUE_SIZE),
             cond_var: SharedConditionVariable::default(),
         }
     }
