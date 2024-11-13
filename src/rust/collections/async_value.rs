@@ -15,13 +15,6 @@ use ::std::{
 };
 
 //======================================================================================================================
-// Constants
-//======================================================================================================================
-
-/// Default timeout for an AynscQueue This was chosen arbitrarily.
-const TIMEOUT_SECONDS: Duration = Duration::from_secs(1000);
-
-//======================================================================================================================
 // Structures
 //======================================================================================================================
 
@@ -69,7 +62,11 @@ impl<T: Clone> AsyncValue<T> {
     }
 
     pub async fn wait_for_change(&mut self, timeout: Option<Duration>) -> Result<T, Fail> {
-        conditional_yield_with_timeout(self.cond_var.wait(), timeout.unwrap_or(TIMEOUT_SECONDS)).await?;
+        match timeout {
+            Some(timeout) => conditional_yield_with_timeout(self.cond_var.wait(), timeout).await?,
+            None => self.cond_var.wait().await,
+        };
+
         Ok(self.value.clone())
     }
 

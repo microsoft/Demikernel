@@ -10,14 +10,6 @@ use crate::{
     runtime::{fail::Fail, network::socket::operation::SocketOp},
 };
 use ::socket2::Type;
-use ::std::time::Duration;
-
-//======================================================================================================================
-// Structures
-//======================================================================================================================
-
-/// Set the timeout to be large enough that we effectively never time out.
-const TIMEOUT: Duration = Duration::from_secs(1000);
 
 //======================================================================================================================
 // Structures
@@ -77,8 +69,8 @@ impl SocketStateMachine {
         loop {
             match self.may_accept() {
                 Ok(()) => {
-                    // If either a time out or the current state changed, check it again.
-                    _ = self.current.clone().wait_for_change(Some(TIMEOUT)).await;
+                    // Check state again if it changes.
+                    _ = self.current.clone().wait_for_change(None).await;
                     continue;
                 },
                 Err(e) => return e,
@@ -96,8 +88,8 @@ impl SocketStateMachine {
         loop {
             match self.may_connect() {
                 Ok(()) => {
-                    // If either a time out or the current state changed, check it again.
-                    _ = self.current.clone().wait_for_change(Some(TIMEOUT)).await;
+                    // Check state again if it changes.
+                    _ = self.current.clone().wait_for_change(None).await;
                     continue;
                 },
                 Err(e) => return e,
@@ -122,8 +114,8 @@ impl SocketStateMachine {
         loop {
             match self.may_push() {
                 Ok(()) => {
-                    // If either a time out or the current state changed, check it again.
-                    _ = self.current.clone().wait_for_change(Some(TIMEOUT)).await;
+                    // Check state again if it changes.
+                    _ = self.current.clone().wait_for_change(None).await;
                     continue;
                 },
                 Err(e) => return e,
@@ -150,8 +142,8 @@ impl SocketStateMachine {
         loop {
             match self.may_pop() {
                 Ok(()) => {
-                    // If either a time out or the current state changed, check it again.
-                    _ = self.current.clone().wait_for_change(Some(TIMEOUT)).await;
+                    // Check state again if it changes.
+                    _ = self.current.clone().wait_for_change(None).await;
                     continue;
                 },
                 Err(e) => return e,
