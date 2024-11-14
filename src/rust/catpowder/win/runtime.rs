@@ -72,7 +72,7 @@ impl SharedCatpowderRuntime {
         for queueid in 0..queue_count {
             rx_rings.push(RxRing::new(&mut api, Self::RING_LENGTH, ifindex, queueid as u32)?);
         }
-        trace!("Created {} RX rings.", rx_rings.len());
+        trace!("Created {} RX rings on interface {}.", rx_rings.len(), ifindex);
 
         Ok(Self(SharedObject::new(CatpowderRuntimeInner { api, tx, rx_rings })))
     }
