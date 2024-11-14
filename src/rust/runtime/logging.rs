@@ -5,7 +5,7 @@
 // Imports
 //======================================================================================================================
 
-use ::flexi_logger::Logger;
+use ::flexi_logger::{with_thread, Logger};
 use ::std::sync::Once;
 
 //======================================================================================================================
@@ -22,6 +22,6 @@ static INIT_LOG: Once = Once::new();
 /// Initializes logging features.
 pub fn initialize() {
     INIT_LOG.call_once(|| {
-        Logger::try_with_env().unwrap().start().unwrap();
+        Logger::try_with_env().unwrap().format(with_thread).start().unwrap();
     });
 }
