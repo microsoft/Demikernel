@@ -98,7 +98,7 @@ mod test {
         let bob_barrier: Arc<Barrier> = Arc::new(Barrier::new(2));
         let alice_barrier: Arc<Barrier> = bob_barrier.clone();
 
-        let alice: JoinHandle<Result<()>> = thread::spawn(move || {
+        let alice: JoinHandle<Result<()>> = thread::Builder::new().name(format!("alice")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(ALICE_CONFIG_PATH, alice_tx, bob_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -128,9 +128,9 @@ mod test {
             alice_barrier.wait();
 
             Ok(())
-        });
+        })?;
 
-        let bob: JoinHandle<Result<()>> = thread::spawn(move || {
+        let bob: JoinHandle<Result<()>> = thread::Builder::new().name(format!("bob")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(BOB_CONFIG_PATH, bob_tx, alice_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -157,7 +157,7 @@ mod test {
             bob_barrier.wait();
 
             Ok(())
-        });
+        })?;
 
         // It is safe to use unwrap here because there should not be any reason that we can't join the thread and if there
         // is, there is nothing to clean up here on the main thread.
@@ -176,7 +176,7 @@ mod test {
         let bob_barrier: Arc<Barrier> = Arc::new(Barrier::new(2));
         let alice_barrier: Arc<Barrier> = bob_barrier.clone();
 
-        let alice: JoinHandle<Result<()>> = thread::spawn(move || {
+        let alice: JoinHandle<Result<()>> = thread::Builder::new().name(format!("alice")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(ALICE_CONFIG_PATH, alice_tx, bob_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -207,9 +207,9 @@ mod test {
             alice_barrier.wait();
 
             Ok(())
-        });
+        })?;
 
-        let bob: JoinHandle<Result<()>> = thread::spawn(move || {
+        let bob: JoinHandle<Result<()>> = thread::Builder::new().name(format!("bob")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(BOB_CONFIG_PATH, bob_tx, alice_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -237,7 +237,7 @@ mod test {
             // Sleep for a while to give Alice time to finish.
             bob_barrier.wait();
             Ok(())
-        });
+        })?;
 
         // It is safe to use unwrap here because there should not be any reason that we can't join the thread and if there
         // is, there is nothing to clean up here on the main thread.
@@ -260,7 +260,7 @@ mod test {
         let bob_barrier: Arc<Barrier> = Arc::new(Barrier::new(2));
         let alice_barrier: Arc<Barrier> = bob_barrier.clone();
 
-        let alice: JoinHandle<Result<()>> = thread::spawn(move || {
+        let alice: JoinHandle<Result<()>> = thread::Builder::new().name(format!("alice")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(ALICE_CONFIG_PATH, alice_tx, bob_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -300,9 +300,9 @@ mod test {
             safe_close_passive(&mut libos, sockqd)?;
             alice_barrier.wait();
             Ok(())
-        });
+        })?;
 
-        let bob: JoinHandle<Result<()>> = thread::spawn(move || {
+        let bob: JoinHandle<Result<()>> = thread::Builder::new().name(format!("bob")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(BOB_CONFIG_PATH, bob_tx, alice_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -340,7 +340,7 @@ mod test {
             bob_barrier.wait();
 
             Ok(())
-        });
+        })?;
         // It is safe to use unwrap here because there should not be any reason that we can't join the thread and if there
         // is, there is nothing to clean up here on the main thread.
         alice.join().unwrap()?;
@@ -616,7 +616,7 @@ mod test {
         let bob_barrier: Arc<Barrier> = Arc::new(Barrier::new(2));
         let alice_barrier: Arc<Barrier> = bob_barrier.clone();
 
-        let alice: JoinHandle<Result<()>> = thread::spawn(move || {
+        let alice: JoinHandle<Result<()>> = thread::Builder::new().name(format!("alice")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(ALICE_CONFIG_PATH, alice_tx, bob_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -643,9 +643,9 @@ mod test {
             safe_close_passive(&mut libos, sockqd)?;
             alice_barrier.wait();
             Ok(())
-        });
+        })?;
 
-        let bob: JoinHandle<Result<()>> = thread::spawn(move || {
+        let bob: JoinHandle<Result<()>> = thread::Builder::new().name(format!("bob")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(BOB_CONFIG_PATH, bob_tx, alice_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -695,7 +695,7 @@ mod test {
             safe_close_active(&mut libos, sockqd)?;
             bob_barrier.wait();
             Ok(())
-        });
+        })?;
 
         // It is safe to use unwrap here because there should not be any reason that we can't join the thread and if there
         // is, there is nothing to clean up here on the main thread.
@@ -718,7 +718,7 @@ mod test {
         let bob_barrier: Arc<Barrier> = Arc::new(Barrier::new(2));
         let alice_barrier: Arc<Barrier> = bob_barrier.clone();
 
-        let alice: JoinHandle<Result<()>> = thread::spawn(move || {
+        let alice: JoinHandle<Result<()>> = thread::Builder::new().name(format!("alice")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(ALICE_CONFIG_PATH, alice_tx, bob_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -759,9 +759,9 @@ mod test {
 
             alice_barrier.wait();
             Ok(())
-        });
+        })?;
 
-        let bob: JoinHandle<Result<()>> = thread::spawn(move || {
+        let bob: JoinHandle<Result<()>> = thread::Builder::new().name(format!("bob")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(BOB_CONFIG_PATH, bob_tx, alice_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -801,7 +801,7 @@ mod test {
 
             bob_barrier.wait();
             Ok(())
-        });
+        })?;
 
         // It is safe to use unwrap here because there should not be any reason that we can't join the thread and if there
         // is, there is nothing to clean up here on the main thread.
@@ -824,7 +824,7 @@ mod test {
         let bob_barrier: Arc<Barrier> = Arc::new(Barrier::new(2));
         let alice_barrier: Arc<Barrier> = bob_barrier.clone();
 
-        let alice: JoinHandle<Result<()>> = thread::spawn(move || {
+        let alice: JoinHandle<Result<()>> = thread::Builder::new().name(format!("alice")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(ALICE_CONFIG_PATH, alice_tx, bob_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -865,9 +865,9 @@ mod test {
             alice_barrier.wait();
 
             Ok(())
-        });
+        })?;
 
-        let bob: JoinHandle<Result<()>> = thread::spawn(move || {
+        let bob: JoinHandle<Result<()>> = thread::Builder::new().name(format!("bob")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(BOB_CONFIG_PATH, bob_tx, alice_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -933,7 +933,7 @@ mod test {
 
             bob_barrier.wait();
             Ok(())
-        });
+        })?;
 
         // It is safe to use unwrap here because there should not be any reason that we can't join the thread and if there
         // is, there is nothing to clean up here on the main thread.
@@ -956,7 +956,7 @@ mod test {
         let bob_barrier: Arc<Barrier> = Arc::new(Barrier::new(2));
         let alice_barrier: Arc<Barrier> = bob_barrier.clone();
 
-        let alice: JoinHandle<Result<()>> = thread::spawn(move || {
+        let alice: JoinHandle<Result<()>> = thread::Builder::new().name(format!("alice")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(ALICE_CONFIG_PATH, alice_tx, bob_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -1007,9 +1007,9 @@ mod test {
 
             alice_barrier.wait();
             Ok(())
-        });
+        })?;
 
-        let bob: JoinHandle<Result<()>> = thread::spawn(move || {
+        let bob: JoinHandle<Result<()>> = thread::Builder::new().name(format!("bob")).spawn(move || {
             let mut libos: DummyLibOS = match DummyLibOS::new_test(BOB_CONFIG_PATH, bob_tx, alice_rx) {
                 Ok(libos) => libos,
                 Err(e) => anyhow::bail!("Could not create inetstack: {:?}", e),
@@ -1047,7 +1047,7 @@ mod test {
 
             bob_barrier.wait();
             Ok(())
-        });
+        })?;
 
         // It is safe to use unwrap here because there should not be any reason that we can't join the thread and if there
         // is, there is nothing to clean up here on the main thread.
