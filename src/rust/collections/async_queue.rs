@@ -20,7 +20,7 @@ use ::std::{
 //======================================================================================================================
 
 // The following value was chosen arbitrarily.
-const TIMEOUT_SECONDS: Duration = Duration::from_secs(1000);
+const DEFAULT_QUEUE_SIZE: usize = 1024;
 
 //======================================================================================================================
 // Structures
@@ -72,7 +72,10 @@ impl<T> AsyncQueue<T> {
                 }
             }
         };
-        conditional_yield_with_timeout(wait_condition, timeout.unwrap_or(TIMEOUT_SECONDS)).await
+        match timeout {
+            Some(timeout) => conditional_yield_with_timeout(wait_condition, timeout).await,
+            None => Ok(wait_condition.await),
+        }
     }
 
     /// Try to get the head of the queue.
@@ -129,7 +132,7 @@ impl<T> SharedAsyncQueue<T> {
 impl<T> Default for AsyncQueue<T> {
     fn default() -> Self {
         Self {
-            queue: VecDeque::<T>::default(),
+            queue: VecDeque::<T>::with_capacity(DEFAULT_QUEUE_SIZE),
             cond_var: SharedConditionVariable::default(),
         }
     }
