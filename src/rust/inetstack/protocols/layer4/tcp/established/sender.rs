@@ -1,6 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+//======================================================================================================================
+// Imports
+//======================================================================================================================
+
 use crate::{
     collections::{async_queue::SharedAsyncQueue, async_value::SharedAsyncValue},
     inetstack::protocols::layer4::tcp::{
@@ -18,6 +22,10 @@ use ::std::{
 };
 use futures::never::Never;
 use std::cmp;
+
+//======================================================================================================================
+// Data Structures
+//======================================================================================================================
 
 // Structure of entries on our unacknowledged queue.
 // TODO: We currently allocate these on the fly when we add a buffer to the queue.  Would be more efficient to have a
@@ -99,17 +107,9 @@ pub struct Sender {
     mss: usize,
 }
 
-impl fmt::Debug for Sender {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("Sender")
-            .field("send_unacked", &self.send_unacked)
-            .field("send_next", &self.send_next_seq_no)
-            .field("send_window", &self.send_window)
-            .field("window_scale", &self.send_window_scale_shift_bits)
-            .field("mss", &self.mss)
-            .finish()
-    }
-}
+//======================================================================================================================
+// Associated Functions
+//======================================================================================================================
 
 impl Sender {
     pub fn new(seq_no: SeqNumber, send_window: u32, send_window_scale_shift_bits: u8, mss: usize) -> Self {
@@ -196,14 +196,15 @@ impl Sender {
             if let Some(buf) = self.unsent_queue.pop(None).await? {
                 self.send_buffer(buf, &mut cb).await?;
             } else {
-                self.send_fin(&mut cb)?;
+                let now: Instant = cb.get_now();
+                self.send_fin(&mut cb, now)?;
                 // Exit the loop because we no longer have anything to process
                 return Err(Fail::new(libc::ECONNRESET, "Processed and sent FIN"));
             }
         }
     }
 
-    fn send_fin(&mut self, cb: &mut SharedControlBlock) -> Result<(), Fail> {
+    fn send_fin(&mut self, cb: &mut SharedControlBlock, now: Instant) -> Result<(), Fail> {
         let mut header: TcpHeader = cb.tcp_header();
         header.seq_num = self.send_next_seq_no.get();
         debug_assert!(self.fin_seq_no.is_some_and(|s| { s == header.seq_num }));
@@ -215,14 +216,14 @@ impl Sender {
         // Add the FIN to our unacknowledged queue.
         let unacked_segment = UnackedSegment {
             bytes: None,
-            initial_tx: Some(cb.get_now()),
+            initial_tx: Some(now),
         };
         self.unacked_queue.push(unacked_segment);
         // Set the retransmit timer.
         if self.retransmit_deadline_time_secs.get().is_none() {
             let rto: Duration = self.rto_calculator.rto();
             trace!("set retransmit: {:?}", rto);
-            self.retransmit_deadline_time_secs.set(Some(cb.get_now() + rto));
+            self.retransmit_deadline_time_secs.set(Some(now + rto));
         }
         Ok(())
     }
@@ -611,5 +612,21 @@ impl Sender {
     // Get the current estimate of RTO.
     pub fn get_rto(&self) -> Duration {
         self.rto_calculator.rto()
+    }
+}
+
+//======================================================================================================================
+// Trait Implementations
+//======================================================================================================================
+
+impl fmt::Debug for Sender {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Sender")
+            .field("send_unacked", &self.send_unacked)
+            .field("send_next", &self.send_next_seq_no)
+            .field("send_window", &self.send_window)
+            .field("window_scale", &self.send_window_scale_shift_bits)
+            .field("mss", &self.mss)
+            .finish()
     }
 }

@@ -74,7 +74,6 @@ impl SharedActiveOpenSocket {
         remote: SocketAddrV4,
         runtime: SharedDemiRuntime,
         layer3_endpoint: SharedLayer3Endpoint,
-        recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>,
         tcp_config: TcpConfig,
         default_socket_options: TcpSocketOptions,
         dead_socket_tx: mpsc::UnboundedSender<QDesc>,
@@ -87,7 +86,7 @@ impl SharedActiveOpenSocket {
             remote,
             runtime: runtime.clone(),
             layer3_endpoint,
-            recv_queue,
+            recv_queue: SharedAsyncQueue::default(),
             tcp_config,
             socket_options: default_socket_options,
             dead_socket_tx,
@@ -160,7 +159,7 @@ impl SharedActiveOpenSocket {
             }
         }
 
-        let (local_window_scale, remote_window_scale): (u32, u8) = match remote_window_scale {
+        let (local_window_scale, remote_window_scale): (u8, u8) = match remote_window_scale {
             Some(remote_window_scale) => {
                 let remote: u8 = if remote_window_scale as usize > MAX_WINDOW_SCALE {
                     warn!(
@@ -171,7 +170,7 @@ impl SharedActiveOpenSocket {
                 } else {
                     remote_window_scale
                 };
-                (self.tcp_config.get_window_scale() as u32, remote)
+                (self.tcp_config.get_window_scale() as u8, remote)
             },
             None => (0, 0),
         };
@@ -214,7 +213,6 @@ impl SharedActiveOpenSocket {
             congestion_control::None::new,
             None,
             self.dead_socket_tx.clone(),
-            None,
         )?)
     }
 
@@ -296,6 +294,10 @@ impl SharedActiveOpenSocket {
     /// Returns the addresses of the two ends of this connection.
     pub fn endpoints(&self) -> (SocketAddrV4, SocketAddrV4) {
         (self.local, self.remote)
+    }
+
+    pub fn receive(&mut self, ipv4_addr: Ipv4Addr, tcp_hdr: TcpHeader, buf: DemiBuffer) {
+        self.recv_queue.push((ipv4_addr, tcp_hdr, buf))
     }
 }
 

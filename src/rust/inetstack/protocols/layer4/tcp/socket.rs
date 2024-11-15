@@ -6,7 +6,6 @@
 //======================================================================================================================
 
 use crate::{
-    collections::async_queue::SharedAsyncQueue,
     expect_some,
     inetstack::protocols::{
         layer3::SharedLayer3Endpoint,
@@ -55,7 +54,6 @@ pub enum SocketState {
 /// Per-queue metadata for the TCP socket.
 pub struct TcpSocket {
     state: SocketState,
-    recv_queue: Option<SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>>,
     runtime: SharedDemiRuntime,
     layer3_endpoint: SharedLayer3Endpoint,
     tcp_config: TcpConfig,
@@ -80,7 +78,6 @@ impl SharedTcpSocket {
     ) -> Self {
         Self(SharedObject::<TcpSocket>::new(TcpSocket {
             state: SocketState::Unbound,
-            recv_queue: None,
             runtime,
             layer3_endpoint,
             tcp_config,
@@ -97,10 +94,8 @@ impl SharedTcpSocket {
         default_socket_options: TcpSocketOptions,
         dead_socket_tx: mpsc::UnboundedSender<QDesc>,
     ) -> Self {
-        let recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)> = socket.get_recv_queue();
         Self(SharedObject::<TcpSocket>::new(TcpSocket {
             state: SocketState::Established(socket),
-            recv_queue: Some(recv_queue),
             runtime,
             layer3_endpoint,
             tcp_config,
@@ -152,23 +147,20 @@ impl SharedTcpSocket {
 
     /// Sets the target queue to listen for incoming connections.
     pub fn listen(&mut self, backlog: usize, nonce: u32) -> Result<(), Fail> {
-        let recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)> =
-            SharedAsyncQueue::<(Ipv4Addr, TcpHeader, DemiBuffer)>::default();
-        self.state = SocketState::Listening(SharedPassiveSocket::new(
+        let passive_socket: SharedPassiveSocket = SharedPassiveSocket::new(
             expect_some!(
                 self.local(),
                 "If we were able to prepare, then the socket must be bound"
             ),
             backlog,
             self.runtime.clone(),
-            recv_queue.clone(),
             self.layer3_endpoint.clone(),
             self.tcp_config.clone(),
             self.socket_options.clone(),
             self.dead_socket_tx.clone(),
             nonce,
-        )?);
-        self.recv_queue = Some(recv_queue);
+        )?;
+        self.state = SocketState::Listening(passive_socket);
         Ok(())
     }
 
@@ -197,8 +189,6 @@ impl SharedTcpSocket {
         remote: SocketAddrV4,
         local_isn: SeqNumber,
     ) -> Result<(), Fail> {
-        let recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)> =
-            SharedAsyncQueue::<(Ipv4Addr, TcpHeader, DemiBuffer)>::default();
         // Create active socket.
         let socket: SharedActiveOpenSocket = SharedActiveOpenSocket::new(
             local_isn,
@@ -206,13 +196,11 @@ impl SharedTcpSocket {
             remote,
             self.runtime.clone(),
             self.layer3_endpoint.clone(),
-            recv_queue.clone(),
             self.tcp_config.clone(),
             self.socket_options.clone(),
             self.dead_socket_tx.clone(),
         )?;
         self.state = SocketState::Connecting(socket.clone());
-        self.recv_queue = Some(recv_queue);
         let new_socket = socket.connect().await?;
         self.state = SocketState::Established(new_socket);
         Ok(())
@@ -301,10 +289,17 @@ impl SharedTcpSocket {
     }
 
     pub fn receive(&mut self, ip_hdr: Ipv4Addr, tcp_hdr: TcpHeader, buf: DemiBuffer) {
-        // If this queue has an allocated receive queue, then direct the packet there.
-        if let Some(recv_queue) = self.recv_queue.as_mut() {
-            recv_queue.push((ip_hdr, tcp_hdr, buf));
-            return;
+        match self.state {
+            SocketState::Unbound => {
+                warn!("Cannot receive packets on a non-listening or connected socket. Dropping packet.")
+            },
+            SocketState::Bound(_) => {
+                warn!("Cannot receive packets on a non-listening or connected socket. Dropping packet.")
+            },
+            SocketState::Listening(ref mut socket) => socket.receive(ip_hdr, tcp_hdr, buf),
+            SocketState::Connecting(ref mut socket) => socket.receive(ip_hdr, tcp_hdr, buf),
+            SocketState::Established(ref socket) => socket.get_cb().receive(tcp_hdr, buf),
+            SocketState::Closing(ref socket) => socket.get_cb().receive(tcp_hdr, buf),
         }
     }
 
