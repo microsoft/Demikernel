@@ -60,8 +60,15 @@ mod raw_socket_config {
     pub const SECTION_NAME: &str = "raw_socket";
     #[cfg(target_os = "linux")]
     pub const LOCAL_INTERFACE_NAME: &str = "linux_interface_name";
+
+    // The primary interface index. This should be the virtualized interface for VMs.
     #[cfg(target_os = "windows")]
     pub const LOCAL_INTERFACE_INDEX: &str = "xdp_interface_index";
+
+    // N.B. hyper-V VMs can have both NetVSC and VF interfaces working in tandem, in which case
+    // we need to listen to the corresponding VF interface as well.
+    #[cfg(target_os = "windows")]
+    pub const LOCAL_VF_INTERFACE_INDEX: &str = "xdp_vf_interface_index";
 }
 
 //======================================================================================================================
@@ -289,6 +296,18 @@ impl Config {
             Ok(addr)
         } else {
             Self::get_int_option(self.get_raw_socket_config()?, raw_socket_config::LOCAL_INTERFACE_INDEX)
+        }
+    }
+
+    #[cfg(all(feature = "catpowder-libos", target_os = "windows"))]
+    pub fn local_vf_interface_index(&self) -> Result<u32, Fail> {
+        if let Some(addr) = Self::get_typed_env_option(raw_socket_config::LOCAL_VF_INTERFACE_INDEX)? {
+            Ok(addr)
+        } else {
+            Self::get_int_option(
+                self.get_raw_socket_config()?,
+                raw_socket_config::LOCAL_VF_INTERFACE_INDEX,
+            )
         }
     }
 
