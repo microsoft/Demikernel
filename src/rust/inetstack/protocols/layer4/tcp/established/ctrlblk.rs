@@ -28,9 +28,8 @@ use crate::{
         network::{config::TcpConfig, socket::option::TcpSocketOptions},
         yield_with_timeout, SharedDemiRuntime, SharedObject,
     },
-    QDesc,
 };
-use ::futures::{channel::mpsc, never::Never, pin_mut, FutureExt};
+use ::futures::{never::Never, pin_mut, FutureExt};
 use ::std::{
     net::{Ipv4Addr, SocketAddrV4},
     ops::{Deref, DerefMut},
@@ -386,7 +385,7 @@ impl SharedControlBlock {
         Ok(())
     }
 
-    pub async fn background(&self, _dead_socket_tx: mpsc::UnboundedSender<QDesc>) {
+    pub async fn background(&self) {
         let acknowledger = async_timer!(
             "tcp::established::background::acknowledger",
             self.clone().background_acknowledger()

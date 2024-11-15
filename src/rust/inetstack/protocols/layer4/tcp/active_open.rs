@@ -25,10 +25,10 @@ use crate::{
         fail::Fail,
         memory::DemiBuffer,
         network::{config::TcpConfig, socket::option::TcpSocketOptions},
-        QDesc, SharedDemiRuntime, SharedObject,
+        SharedDemiRuntime, SharedObject,
     },
 };
-use ::futures::{channel::mpsc, select_biased, FutureExt};
+use ::futures::{select_biased, FutureExt};
 use ::std::{
     net::{Ipv4Addr, SocketAddrV4},
     ops::{Deref, DerefMut},
@@ -56,7 +56,6 @@ pub struct ActiveOpenSocket {
     recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>,
     tcp_config: TcpConfig,
     socket_options: TcpSocketOptions,
-    dead_socket_tx: mpsc::UnboundedSender<QDesc>,
     state: SharedAsyncValue<State>,
 }
 
@@ -76,7 +75,6 @@ impl SharedActiveOpenSocket {
         layer3_endpoint: SharedLayer3Endpoint,
         tcp_config: TcpConfig,
         default_socket_options: TcpSocketOptions,
-        dead_socket_tx: mpsc::UnboundedSender<QDesc>,
     ) -> Result<Self, Fail> {
         // TODO: Add fast path here when remote is already in the ARP cache (and subtract one retry).
 
@@ -89,7 +87,6 @@ impl SharedActiveOpenSocket {
             recv_queue: SharedAsyncQueue::default(),
             tcp_config,
             socket_options: default_socket_options,
-            dead_socket_tx,
             state: SharedAsyncValue::new(State::Connecting),
         })))
     }
@@ -212,7 +209,6 @@ impl SharedActiveOpenSocket {
             mss,
             congestion_control::None::new,
             None,
-            self.dead_socket_tx.clone(),
         )?)
     }
 

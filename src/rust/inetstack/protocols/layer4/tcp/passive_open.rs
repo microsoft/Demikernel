@@ -30,10 +30,10 @@ use crate::{
         fail::Fail,
         memory::DemiBuffer,
         network::{config::TcpConfig, consts::MAX_WINDOW_SCALE, socket::option::TcpSocketOptions},
-        QDesc, SharedDemiRuntime, SharedObject,
+        SharedDemiRuntime, SharedObject,
     },
 };
-use ::futures::{channel::mpsc, FutureExt};
+use ::futures::FutureExt;
 use ::libc::{EBADMSG, ETIMEDOUT};
 use ::std::{
     collections::HashMap,
@@ -68,7 +68,6 @@ pub struct PassiveSocket {
     tcp_config: TcpConfig,
     // We do not use these right now, but will in the future.
     socket_options: TcpSocketOptions,
-    dead_socket_tx: mpsc::UnboundedSender<QDesc>,
 }
 
 #[derive(Clone)]
@@ -86,7 +85,6 @@ impl SharedPassiveSocket {
         layer3_endpoint: SharedLayer3Endpoint,
         tcp_config: TcpConfig,
         default_socket_options: TcpSocketOptions,
-        dead_socket_tx: mpsc::UnboundedSender<QDesc>,
         nonce: u32,
     ) -> Result<Self, Fail> {
         Ok(Self(SharedObject::<PassiveSocket>::new(PassiveSocket {
@@ -100,7 +98,6 @@ impl SharedPassiveSocket {
             layer3_endpoint,
             tcp_config,
             socket_options: default_socket_options,
-            dead_socket_tx,
         })))
     }
 
@@ -439,7 +436,6 @@ impl SharedPassiveSocket {
             mss,
             congestion_control::None::new,
             None,
-            self.dead_socket_tx.clone(),
         )?;
 
         Ok(new_socket)
