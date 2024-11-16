@@ -76,13 +76,18 @@ impl SharedCatpowderRuntime {
         }
         trace!("Created {} RX rings on interface {}", rx_rings.len(), ifindex);
 
-        if let Ok(vf_if_index) = vf_if_index { // Optionally create VF RX rings
+        if let Ok(vf_if_index) = vf_if_index {
+            // Optionally create VF RX rings
             let vf_queue_count = deduce_rss_settings(&mut api, vf_if_index)?;
             let mut vf_rx_rings = Vec::with_capacity(vf_queue_count as usize);
             for queueid in 0..vf_queue_count {
                 vf_rx_rings.push(RxRing::new(&mut api, Self::RING_LENGTH, vf_if_index, queueid as u32)?);
             }
-            trace!("Created {} RX rings on VF interface {}.", vf_rx_rings.len(), vf_if_index);
+            trace!(
+                "Created {} RX rings on VF interface {}.",
+                vf_rx_rings.len(),
+                vf_if_index
+            );
 
             Ok(Self(SharedObject::new(CatpowderRuntimeInner {
                 api,
