@@ -53,8 +53,6 @@ const MIN_UNACKED_QUEUE_SIZE_FRAMES: usize = 64;
 // of the unacked queue, below which memory allocation is not required.
 const MIN_UNSENT_QUEUE_SIZE_FRAMES: usize = 64;
 
-// TODO: Consider moving retransmit timer and congestion control fields out of this structure.
-// TODO: Make all public fields in this structure private.
 pub struct Sender {
     //
     // Send Sequence Space:
@@ -294,8 +292,7 @@ impl Sender {
     }
 
     fn send_fin(cb: &mut ControlBlock, layer3_endpoint: &mut SharedLayer3Endpoint, now: Instant) -> Result<(), Fail> {
-        let mut header: TcpHeader = Self::tcp_header(cb);
-        header.seq_num = cb.sender.send_next_seq_no.get();
+        let mut header: TcpHeader = Self::tcp_header(cb, None);
         debug_assert!(cb.sender.fin_seq_no.is_some_and(|s| { s == header.seq_num }));
         header.fin = true;
         Self::emit(cb, layer3_endpoint, header, None);
@@ -382,8 +379,7 @@ impl Sender {
         let mut win_sz_watched: SharedAsyncValue<u32> = cb.sender.send_window.clone();
         loop {
             // Create packet.
-            let mut header: TcpHeader = Self::tcp_header(cb);
-            header.seq_num = cb.sender.send_next_seq_no.get();
+            let header: TcpHeader = Self::tcp_header(cb, None);
             Self::emit(cb, layer3_endpoint, header, Some(probe.clone()));
 
             match win_sz_watched.wait_for_change(Some(timeout)).await {
@@ -438,8 +434,7 @@ impl Sender {
         );
 
         // Prepare the segment and send it.
-        let mut header: TcpHeader = Self::tcp_header(cb);
-        header.seq_num = cb.sender.send_next_seq_no.get();
+        let mut header: TcpHeader = Self::tcp_header(cb, None);
         if do_push {
             header.psh = true;
         }
@@ -466,14 +461,16 @@ impl Sender {
     }
 
     /// Fetch a TCP header filling out various values based on our current state.
-    /// TODO: Fix the "filling out various values based on our current state" part to actually do that correctly.
-    pub fn tcp_header(cb: &mut ControlBlock) -> TcpHeader {
+    /// If a sequence number is provided, use it otherwise, use the current unsent sequence number.
+    /// The only time that the unsent sequence number is not used is when we are retransmitting.
+    pub fn tcp_header(cb: &mut ControlBlock, seq_num: Option<SeqNumber>) -> TcpHeader {
         let mut header: TcpHeader = TcpHeader::new(cb.local.port(), cb.remote.port());
         header.window_size = cb.receiver.hdr_window_size();
 
         // Note that once we reach a synchronized state we always include a valid acknowledgement number.
         header.ack = true;
         header.ack_num = cb.receiver.receive_next_seq_no;
+        header.seq_num = seq_num.unwrap_or(cb.sender.send_next_seq_no.get());
 
         // Return this header.
         header
@@ -592,8 +589,7 @@ impl Sender {
                 // TODO: Issue #198 Repacketization - we should send a full MSS (and set the FIN flag if applicable).
 
                 // Prepare and send the segment.
-                let mut header: TcpHeader = Self::tcp_header(cb);
-                header.seq_num = cb.sender.send_unacked.get();
+                let mut header: TcpHeader = Self::tcp_header(cb, Some(cb.sender.send_unacked.get()));
                 // If data exists, then this is a regular packet, otherwise, its a FIN.
                 if data.is_some() {
                     header.psh = true;
@@ -609,7 +605,6 @@ impl Sender {
     // Process an ack.
     pub fn process_ack(cb: &mut ControlBlock, header: &TcpHeader, now: Instant) {
         // Start by checking that the ACK acknowledges something new.
-        // TODO: Look into removing Watched types.
         let send_unacknowledged: SeqNumber = cb.sender.send_unacked.get();
 
         if send_unacknowledged < header.ack_num {
@@ -654,6 +649,13 @@ impl Sender {
             // TODO: Implement fast-retransmit.  In which case, we'd increment our dup-ack counter here.
             warn!("process_ack(): received duplicate ack ({:?})", header.ack_num);
         }
+    }
+
+    /// Send an ACK to our peer, reflecting our current state.
+    pub fn send_ack(cb: &mut ControlBlock, layer3_endpoint: &mut SharedLayer3Endpoint) {
+        trace!("sending ack");
+        let header: TcpHeader = Self::tcp_header(cb, None);
+        Self::emit(cb, layer3_endpoint, header, None);
     }
 
     /// Transmit this message to our connected peer.

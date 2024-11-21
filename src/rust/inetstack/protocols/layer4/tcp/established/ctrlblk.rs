@@ -15,11 +15,9 @@ use ::std::net::SocketAddrV4;
 // Structures
 //======================================================================================================================
 
-// TCP Connection State.
-// Note: This ControlBlock structure is only used after we've reached the ESTABLISHED state, so states LISTEN,
-// SYN_RCVD, and SYN_SENT aren't included here.
-// This struct has only public members because includes state for both the send and receive path and is accessed by
-// both.
+/// TCP Connection State.
+/// Note: This ControlBlock structure is only used after we've reached the ESTABLISHED state, so states LISTEN,
+/// SYN_RCVD, and SYN_SENT aren't included here.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum State {
     Established,
@@ -32,24 +30,16 @@ pub enum State {
     Closed,
 }
 
-//======================================================================================================================
-// Data Structures
-//======================================================================================================================
-
 /// Transmission control block for representing our TCP connection.
+/// This struct has only public members because includes state for both the send and receive path and is accessed by
+/// both.
 pub struct ControlBlock {
     pub local: SocketAddrV4,
     pub remote: SocketAddrV4,
-
     pub tcp_config: TcpConfig,
     pub socket_options: TcpSocketOptions,
-
-    // TCP Connection State.
     pub state: State,
-
-    // TCP send path state.
     pub sender: Sender,
-    // TCP receive path state.
     pub receiver: Receiver,
 
     // Congestion control trait implementation we're currently using.
