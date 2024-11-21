@@ -10,7 +10,7 @@ use crate::{
     inetstack::protocols::{
         layer3::SharedLayer3Endpoint,
         layer4::tcp::{
-            active_open::SharedActiveOpenSocket, established::EstablishedSocket, header::TcpHeader,
+            active_open::SharedActiveOpenSocket, established::SharedEstablishedSocket, header::TcpHeader,
             passive_open::SharedPassiveSocket, SeqNumber,
         },
     },
@@ -42,8 +42,8 @@ pub enum SocketState {
     Bound(SocketAddrV4),
     Listening(SharedPassiveSocket),
     Connecting(SharedActiveOpenSocket),
-    Established(EstablishedSocket),
-    Closing(EstablishedSocket),
+    Established(SharedEstablishedSocket),
+    Closing(SharedEstablishedSocket),
 }
 
 //======================================================================================================================
@@ -83,7 +83,7 @@ impl SharedTcpSocket {
     }
 
     pub fn new_established(
-        socket: EstablishedSocket,
+        socket: SharedEstablishedSocket,
         runtime: SharedDemiRuntime,
         layer3_endpoint: SharedLayer3Endpoint,
         tcp_config: TcpConfig,
@@ -163,7 +163,7 @@ impl SharedTcpSocket {
             SocketState::Listening(ref listening_socket) => listening_socket.clone(),
             _ => unreachable!("State machine check should ensure that this socket is listening"),
         };
-        let new_socket: EstablishedSocket = listening_socket.do_accept().await?;
+        let new_socket: SharedEstablishedSocket = listening_socket.do_accept().await?;
         // Insert queue into queue table and get new queue descriptor.
         let new_queue = Self::new_established(
             new_socket,
@@ -289,8 +289,8 @@ impl SharedTcpSocket {
             },
             SocketState::Listening(ref mut socket) => socket.receive(ip_hdr, tcp_hdr, buf),
             SocketState::Connecting(ref mut socket) => socket.receive(ip_hdr, tcp_hdr, buf),
-            SocketState::Established(ref socket) => socket.get_cb().receive(tcp_hdr, buf),
-            SocketState::Closing(ref socket) => socket.get_cb().receive(tcp_hdr, buf),
+            SocketState::Established(ref mut socket) => socket.receive(tcp_hdr, buf),
+            SocketState::Closing(ref mut socket) => socket.receive(tcp_hdr, buf),
         }
     }
 

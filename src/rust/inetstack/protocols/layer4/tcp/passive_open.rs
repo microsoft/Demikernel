@@ -17,7 +17,7 @@ use crate::{
             constants::FALLBACK_MSS,
             established::{
                 congestion_control::{self, CongestionControl},
-                EstablishedSocket,
+                SharedEstablishedSocket,
             },
             header::{TcpHeader, TcpOptions2},
             isn_generator::IsnGenerator,
@@ -59,7 +59,7 @@ pub struct PassiveSocket {
     // TCP Connection State.
     state: SharedAsyncValue<State>,
     connections: HashMap<SocketAddrV4, SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>>,
-    ready: AsyncQueue<(SocketAddrV4, Result<EstablishedSocket, Fail>)>,
+    ready: AsyncQueue<(SocketAddrV4, Result<SharedEstablishedSocket, Fail>)>,
     max_backlog: usize,
     isn_generator: IsnGenerator,
     local: SocketAddrV4,
@@ -90,7 +90,7 @@ impl SharedPassiveSocket {
         Ok(Self(SharedObject::<PassiveSocket>::new(PassiveSocket {
             state: SharedAsyncValue::new(State::Listening),
             connections: HashMap::<SocketAddrV4, SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>>::new(),
-            ready: AsyncQueue::<(SocketAddrV4, Result<EstablishedSocket, Fail>)>::default(),
+            ready: AsyncQueue::<(SocketAddrV4, Result<SharedEstablishedSocket, Fail>)>::default(),
             max_backlog,
             isn_generator: IsnGenerator::new(nonce),
             local,
@@ -107,7 +107,7 @@ impl SharedPassiveSocket {
     }
 
     /// Accept a new connection by fetching one from the queue of requests, blocking if there are no new requests.
-    pub async fn do_accept(&mut self) -> Result<EstablishedSocket, Fail> {
+    pub async fn do_accept(&mut self) -> Result<SharedEstablishedSocket, Fail> {
         let (_, new_socket) = self.ready.pop(None).await?;
         new_socket
     }
@@ -131,7 +131,7 @@ impl SharedPassiveSocket {
         // See if this packet is for an already established but not accepted socket.
         if let Some((_, socket)) = self.ready.get_values().find(|(addr, _)| *addr == remote) {
             if let Ok(socket) = socket {
-                socket.get_cb().receive(tcp_hdr, buf);
+                socket.clone().receive(tcp_hdr, buf);
             }
             return;
         }
@@ -366,7 +366,7 @@ impl SharedPassiveSocket {
         header_window_size: u16,
         remote_window_scale: Option<u8>,
         mss: usize,
-    ) -> Result<EstablishedSocket, Fail> {
+    ) -> Result<SharedEstablishedSocket, Fail> {
         let (ipv4_hdr, tcp_hdr, buf) = recv_queue.pop(None).await?;
         debug!("Received ACK: {:?}", tcp_hdr);
 
@@ -418,7 +418,7 @@ impl SharedPassiveSocket {
             recv_queue.push((ipv4_hdr, tcp_hdr, buf));
         }
 
-        let new_socket: EstablishedSocket = EstablishedSocket::new(
+        let new_socket: SharedEstablishedSocket = SharedEstablishedSocket::new(
             self.local,
             remote,
             self.runtime.clone(),
@@ -441,7 +441,7 @@ impl SharedPassiveSocket {
         Ok(new_socket)
     }
 
-    fn complete_handshake(&mut self, remote: SocketAddrV4, result: Result<EstablishedSocket, Fail>) {
+    fn complete_handshake(&mut self, remote: SocketAddrV4, result: Result<SharedEstablishedSocket, Fail>) {
         self.connections.remove(&remote);
         self.ready.push((remote, result));
     }
