@@ -21,10 +21,9 @@ use crate::{
                 SocketId,
             },
         },
-        QDesc, SharedDemiRuntime, SharedObject,
+        SharedDemiRuntime, SharedObject,
     },
 };
-use ::futures::channel::mpsc;
 use ::rand::{prelude::SmallRng, Rng, SeedableRng};
 
 use ::std::{
@@ -45,7 +44,6 @@ pub struct TcpPeer {
     tcp_config: TcpConfig,
     default_socket_options: TcpSocketOptions,
     rng: SmallRng,
-    dead_socket_tx: mpsc::UnboundedSender<QDesc>,
     addresses: HashMap<SocketId, SharedTcpSocket>,
 }
 
@@ -65,7 +63,6 @@ impl SharedTcpPeer {
     ) -> Result<Self, Fail> {
         let mut rng: SmallRng = SmallRng::from_seed(rng_seed);
         let nonce: u32 = rng.gen();
-        let (tx, _) = mpsc::unbounded();
         Ok(Self(SharedObject::<TcpPeer>::new(TcpPeer {
             isn_generator: IsnGenerator::new(nonce),
             runtime,
@@ -74,7 +71,6 @@ impl SharedTcpPeer {
             tcp_config: TcpConfig::new(config)?,
             default_socket_options: TcpSocketOptions::new(config)?,
             rng,
-            dead_socket_tx: tx,
             addresses: HashMap::<SocketId, SharedTcpSocket>::new(),
         })))
     }
@@ -86,7 +82,6 @@ impl SharedTcpPeer {
             self.layer3_endpoint.clone(),
             self.tcp_config.clone(),
             self.default_socket_options.clone(),
-            self.dead_socket_tx.clone(),
         ))
     }
 

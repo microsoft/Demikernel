@@ -24,10 +24,9 @@ use crate::{
                 SocketId,
             },
         },
-        QDesc, SharedDemiRuntime, SharedObject,
+        SharedDemiRuntime, SharedObject,
     },
 };
-use ::futures::channel::mpsc;
 use ::std::{
     fmt::Debug,
     net::{Ipv4Addr, SocketAddrV4},
@@ -58,7 +57,6 @@ pub struct TcpSocket {
     layer3_endpoint: SharedLayer3Endpoint,
     tcp_config: TcpConfig,
     socket_options: TcpSocketOptions,
-    dead_socket_tx: mpsc::UnboundedSender<QDesc>,
 }
 
 pub struct SharedTcpSocket(SharedObject<TcpSocket>);
@@ -74,7 +72,6 @@ impl SharedTcpSocket {
         layer3_endpoint: SharedLayer3Endpoint,
         tcp_config: TcpConfig,
         default_socket_options: TcpSocketOptions,
-        dead_socket_tx: mpsc::UnboundedSender<QDesc>,
     ) -> Self {
         Self(SharedObject::<TcpSocket>::new(TcpSocket {
             state: SocketState::Unbound,
@@ -82,7 +79,6 @@ impl SharedTcpSocket {
             layer3_endpoint,
             tcp_config,
             socket_options: default_socket_options,
-            dead_socket_tx,
         }))
     }
 
@@ -92,7 +88,6 @@ impl SharedTcpSocket {
         layer3_endpoint: SharedLayer3Endpoint,
         tcp_config: TcpConfig,
         default_socket_options: TcpSocketOptions,
-        dead_socket_tx: mpsc::UnboundedSender<QDesc>,
     ) -> Self {
         Self(SharedObject::<TcpSocket>::new(TcpSocket {
             state: SocketState::Established(socket),
@@ -100,7 +95,6 @@ impl SharedTcpSocket {
             layer3_endpoint,
             tcp_config,
             socket_options: default_socket_options,
-            dead_socket_tx,
         }))
     }
 
@@ -157,7 +151,6 @@ impl SharedTcpSocket {
             self.layer3_endpoint.clone(),
             self.tcp_config.clone(),
             self.socket_options.clone(),
-            self.dead_socket_tx.clone(),
             nonce,
         )?;
         self.state = SocketState::Listening(passive_socket);
@@ -178,7 +171,6 @@ impl SharedTcpSocket {
             self.layer3_endpoint.clone(),
             self.tcp_config.clone(),
             self.socket_options.clone(),
-            self.dead_socket_tx.clone(),
         );
         Ok(new_queue)
     }
@@ -198,7 +190,6 @@ impl SharedTcpSocket {
             self.layer3_endpoint.clone(),
             self.tcp_config.clone(),
             self.socket_options.clone(),
-            self.dead_socket_tx.clone(),
         )?;
         self.state = SocketState::Connecting(socket.clone());
         let new_socket = socket.connect().await?;

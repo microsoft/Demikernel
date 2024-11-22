@@ -20,11 +20,11 @@ use crate::{
         fail::Fail,
         memory::DemiBuffer,
         network::{config::TcpConfig, socket::option::TcpSocketOptions},
-        QDesc, SharedDemiRuntime,
+        SharedDemiRuntime,
     },
     QToken,
 };
-use ::futures::{channel::mpsc, FutureExt};
+use ::futures::FutureExt;
 use ::std::{
     net::{Ipv4Addr, SocketAddrV4},
     time::Duration,
@@ -61,7 +61,6 @@ impl EstablishedSocket {
         sender_mss: usize,
         cc_constructor: CongestionControlConstructor,
         congestion_control_options: Option<congestion_control::Options>,
-        dead_socket_tx: mpsc::UnboundedSender<QDesc>,
     ) -> Result<Self, Fail> {
         // TODO: Maybe add the queue descriptor here.
         let cb = SharedControlBlock::new(
@@ -87,7 +86,7 @@ impl EstablishedSocket {
         let cb2: SharedControlBlock = cb.clone();
         let qt: QToken = runtime.insert_background_coroutine(
             "bgc::inetstack::tcp::established::background",
-            Box::pin(async move { cb2.background(dead_socket_tx).await }.fuse()),
+            Box::pin(async move { cb2.background().await }.fuse()),
         )?;
         Ok(Self {
             cb,
