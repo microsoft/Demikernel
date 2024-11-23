@@ -337,6 +337,11 @@ impl SharedControlBlock {
     pub fn get_state(&self) -> State {
         self.state
     }
+
+    pub fn set_state(&mut self, state: State) {
+        self.state = state;
+    }
+
     // This coroutine runs the close protocol.
     pub async fn close(&mut self) -> Result<(), Fail> {
         // Assert we are in a valid state and move to new state.
