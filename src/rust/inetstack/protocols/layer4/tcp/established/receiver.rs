@@ -188,7 +188,7 @@ impl Receiver {
             &mut seg_len,
             &mut cb,
         )?;
-        self.check_rst(&header)?;
+        self.check_and_process_rst(&header, &mut cb)?;
         self.check_syn(&header)?;
         self.process_ack(&header, &mut cb, now)?;
 
@@ -374,20 +374,16 @@ impl Receiver {
         Ok(())
     }
 
-    // Check the RST bit.
-    fn check_rst(&mut self, header: &TcpHeader) -> Result<(), Fail> {
-        if header.rst {
-            // TODO: RFC 5961 "Blind Reset Attack Using the RST Bit" prevention would have us ACK and drop if the new
-            // segment doesn't start precisely on RCV.NXT.
-
-            // Our peer has given up.  Shut the connection down hard.
-            info!("Received RST");
-            // TODO: Schedule a close coroutine.
-            let cause: String = format!("remote reset connection");
-            info!("check_rst(): {}", cause);
-            return Err(Fail::new(libc::ECONNRESET, &cause));
+    // TODO: RFC 5961 "Blind Reset Attack Using the RST Bit" prevention would have us ACK and drop if the new segment
+    // doesn't start precisely on RCV.NXT.
+    fn check_and_process_rst(&mut self, header: &TcpHeader, cb: &mut SharedControlBlock) -> Result<(), Fail> {
+        if !header.rst {
+            return Ok(());
         }
-        Ok(())
+        info!("Received RST: remote reset connection");
+        cb.set_state(State::Closed);
+        self.push_fin();
+        return Err(Fail::new(libc::ECONNRESET, "remote reset connection"));
     }
 
     // Check the SYN bit.

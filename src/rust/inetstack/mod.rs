@@ -88,7 +88,7 @@ impl SharedInetStack {
             runtime: runtime.clone(),
             layer4_endpoint,
         }));
-        runtime.insert_background_coroutine("bgc::inetstack::poll_recv", Box::pin(me.clone().poll().fuse()))?;
+        runtime.insert_background_coroutine("bgc::inetstack::poll", Box::pin(me.clone().poll().fuse()))?;
         Ok(me)
     }
 
@@ -96,7 +96,6 @@ impl SharedInetStack {
     /// Then ask the runtime to receive new data which we will forward to the engine to parse and
     /// route to the correct protocol.
     pub async fn poll(mut self) {
-        timer!("inetstack::poll");
         loop {
             for _ in 0..MAX_RECV_ITERS {
                 self.layer4_endpoint.poll_once();
