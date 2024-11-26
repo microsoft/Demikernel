@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-name: Main Catpowder
+name: Catpowder (Linux Raw Sockets)
 
 concurrency:
   group: catpowder
@@ -26,7 +26,7 @@ env:
 jobs:
 
   debug-pipeline:
-    name: Debug Pipeline
+    name: Catpowder Debug Pipeline (Linux Raw Sockets)
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -87,13 +87,13 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: debug-pipeline-logs
+        name: catpowder-debug-pipeline-logs
         path: |
           **/*.stdout.txt
           **/*.stderr.txt
 
   release-pipeline:
-    name: Release Pipeline
+    name: Catpowder Release Pipeline (Linux Raw Sockets)
     needs: debug-pipeline
     runs-on: ubuntu-latest
     steps:
@@ -154,13 +154,13 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: release-pipeline-logs
+        name: catpowder-release-pipeline-logs
         path: |
           **/*.stdout.txt
           **/*.stderr.txt
 
   report-performance:
-    name: Report Performance
+    name: Catpowder Performance Report (Linux Raw Sockets)
     needs: release-pipeline
     runs-on: ubuntu-latest
     permissions:
@@ -178,8 +178,8 @@ jobs:
     - name: Download Release Pipeline Logs
       uses: actions/download-artifact@v4
       with:
-        name: release-pipeline-logs
-        path: ./release_pipeline_logs
+        name: catpowder-release-pipeline-logs
+        path: ./catpowder_release_pipeline_logs
     - name: Setup FlameGraph Repository
       run: |
         git clone https://github.com/brendangregg/FlameGraph.git /tmp/FlameGraph
@@ -195,7 +195,7 @@ jobs:
         stats=$(python3 tools/perf.py \
           --branch origin/$branch_name \
           --libos $LIBOS \
-          --log-dir ./release_pipeline_logs)
+          --log-dir ./catpowder_release_pipeline_logs)
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "MESSAGE<<$EOF" >> $GITHUB_OUTPUT

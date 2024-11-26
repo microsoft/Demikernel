@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-name: Main Catnip
+name: Catnip (Linux DPDK)
 
 concurrency:
   group: catnip
@@ -26,7 +26,7 @@ env:
 jobs:
 
   debug-pipeline:
-    name: Debug Pipeline
+    name: Catnip Debug Pipeline (Linux DPDK)
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -91,13 +91,13 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: debug-pipeline-logs
+        name: catnip-debug-pipeline-logs
         path: |
           **/*.stdout.txt
           **/*.stderr.txt
 
   release-pipeline:
-    name: Release Pipeline
+    name: Catnip Release Pipeline (Linux DPDK)
     needs: debug-pipeline
     runs-on: ubuntu-latest
     steps:
@@ -162,13 +162,13 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: release-pipeline-logs
+        name: catnip-release-pipeline-logs
         path: |
           **/*.stdout.txt
           **/*.stderr.txt
 
   report-performance:
-    name: Report Performance
+    name: Catnip Performance Report (Linux DPDK)
     needs: release-pipeline
     runs-on: ubuntu-latest
     permissions:
@@ -186,8 +186,8 @@ jobs:
     - name: Download Release Pipeline Logs
       uses: actions/download-artifact@v4
       with:
-        name: release-pipeline-logs
-        path: ./release_pipeline_logs
+        name: catnip-release-pipeline-logs
+        path: ./catnip_release_pipeline_logs
     - name: Setup FlameGraph Repository
       run: |
         git clone https://github.com/brendangregg/FlameGraph.git /tmp/FlameGraph
@@ -203,7 +203,7 @@ jobs:
         stats=$(python3 tools/perf.py \
           --branch origin/$branch_name \
           --libos $LIBOS \
-          --log-dir ./release_pipeline_logs)
+          --log-dir ./catnip_release_pipeline_logs)
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "MESSAGE<<$EOF" >> $GITHUB_OUTPUT

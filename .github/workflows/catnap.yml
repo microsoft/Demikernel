@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-name: Main Catnap
+name: Catnap (Linux Kernel)
 
 concurrency:
   group: catnap
@@ -26,7 +26,7 @@ env:
 jobs:
 
   debug-pipeline:
-    name: Debug Pipeline
+    name: Catnap Debug Pipeline (Linux Kernel)
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -69,13 +69,13 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: debug-pipeline-logs
+        name: catnap-debug-pipeline-logs
         path: |
           **/*.stdout.txt
           **/*.stderr.txt
 
   release-pipeline:
-    name: Release Pipeline
+    name: Catnap Release Pipeline (Linux Kernel)
     needs: debug-pipeline
     runs-on: ubuntu-latest
     steps:
@@ -118,13 +118,13 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: release-pipeline-logs
+        name: catnap-release-pipeline-logs
         path: |
           **/*.stdout.txt
           **/*.stderr.txt
 
   report-performance:
-    name: Report Performance
+    name: Catnap Performance Report (Linux Kernel)
     needs: release-pipeline
     runs-on: ubuntu-latest
     permissions:
@@ -142,8 +142,8 @@ jobs:
     - name: Download Release Pipeline Logs
       uses: actions/download-artifact@v4
       with:
-        name: release-pipeline-logs
-        path: ./release_pipeline_logs
+        name: catnap-release-pipeline-logs
+        path: ./catnap_release_pipeline_logs
     - name: Setup FlameGraph Repository
       run: |
         git clone https://github.com/brendangregg/FlameGraph.git /tmp/FlameGraph
@@ -159,7 +159,7 @@ jobs:
         stats=$(python3 tools/perf.py \
           --branch origin/$branch_name \
           --libos $LIBOS \
-          --log-dir ./release_pipeline_logs)
+          --log-dir ./catnap_release_pipeline_logs)
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "MESSAGE<<$EOF" >> $GITHUB_OUTPUT
