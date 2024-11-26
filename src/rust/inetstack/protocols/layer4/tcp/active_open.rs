@@ -14,7 +14,7 @@ use crate::{
             constants::{FALLBACK_MSS, MAX_WINDOW_SCALE},
             established::{
                 congestion_control::{self, CongestionControl},
-                EstablishedSocket,
+                SharedEstablishedSocket,
             },
             header::{TcpHeader, TcpOptions2},
             SeqNumber,
@@ -91,7 +91,7 @@ impl SharedActiveOpenSocket {
         })))
     }
 
-    fn process_ack(&mut self, header: TcpHeader) -> Result<EstablishedSocket, Fail> {
+    fn process_ack(&mut self, header: TcpHeader) -> Result<SharedEstablishedSocket, Fail> {
         let expected_seq: SeqNumber = self.local_isn + SeqNumber::from(1);
 
         // Bail if we didn't receive a ACK packet with the right sequence number.
@@ -191,7 +191,7 @@ impl SharedActiveOpenSocket {
             "Window scale: local {}, remote {}",
             local_window_scale, remote_window_scale
         );
-        Ok(EstablishedSocket::new(
+        Ok(SharedEstablishedSocket::new(
             self.local,
             self.remote,
             self.runtime.clone(),
@@ -212,7 +212,7 @@ impl SharedActiveOpenSocket {
         )?)
     }
 
-    pub async fn connect(mut self) -> Result<EstablishedSocket, Fail> {
+    pub async fn connect(mut self) -> Result<SharedEstablishedSocket, Fail> {
         // Start connection handshake.
         let handshake_retries: usize = self.tcp_config.get_handshake_retries();
         let handshake_timeout = self.tcp_config.get_handshake_timeout();
