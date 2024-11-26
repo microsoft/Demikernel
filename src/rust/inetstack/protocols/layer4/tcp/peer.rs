@@ -7,19 +7,19 @@
 
 use crate::{
     demikernel::config::Config,
-    inetstack::protocols::{
-        layer3::SharedLayer3Endpoint,
-        layer4::tcp::{header::TcpHeader, isn_generator::IsnGenerator, socket::SharedTcpSocket, SeqNumber},
+    inetstack::{
+        config::TcpConfig,
+        protocols::{
+            layer3::SharedLayer3Endpoint,
+            layer4::tcp::{header::TcpHeader, isn_generator::IsnGenerator, socket::SharedTcpSocket, SeqNumber},
+        },
     },
     runtime::{
         fail::Fail,
         memory::DemiBuffer,
-        network::{
-            config::TcpConfig,
-            socket::{
-                option::{SocketOption, TcpSocketOptions},
-                SocketId,
-            },
+        network::socket::{
+            option::{SocketOption, TcpSocketOptions},
+            SocketId,
         },
         SharedDemiRuntime, SharedObject,
     },

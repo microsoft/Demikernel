@@ -10,7 +10,7 @@ use ::crossbeam_channel::{Receiver, Sender};
 use ::demikernel::{
     demi_sgarray_t,
     demikernel::{config::Config, libos::network::libos::SharedNetworkLibOS},
-    inetstack::{protocols::MAX_HEADER_SIZE, SharedInetStack},
+    inetstack::{consts::MAX_HEADER_SIZE, SharedInetStack},
     runtime::{
         fail::Fail,
         logging,

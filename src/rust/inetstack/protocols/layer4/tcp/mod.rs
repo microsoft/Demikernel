@@ -2,7 +2,6 @@
 // Licensed under the MIT license.
 
 mod active_open;
-pub mod constants;
 mod established;
 pub mod header;
 mod isn_generator;

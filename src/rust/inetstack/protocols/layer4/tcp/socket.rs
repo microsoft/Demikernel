@@ -7,22 +7,22 @@
 
 use crate::{
     expect_some,
-    inetstack::protocols::{
-        layer3::SharedLayer3Endpoint,
-        layer4::tcp::{
-            active_open::SharedActiveOpenSocket, established::SharedEstablishedSocket, header::TcpHeader,
-            passive_open::SharedPassiveSocket, SeqNumber,
+    inetstack::{
+        config::TcpConfig,
+        protocols::{
+            layer3::SharedLayer3Endpoint,
+            layer4::tcp::{
+                active_open::SharedActiveOpenSocket, established::SharedEstablishedSocket, header::TcpHeader,
+                passive_open::SharedPassiveSocket, SeqNumber,
+            },
         },
     },
     runtime::{
         fail::Fail,
         memory::DemiBuffer,
-        network::{
-            config::TcpConfig,
-            socket::{
-                option::{SocketOption, TcpSocketOptions},
-                SocketId,
-            },
+        network::socket::{
+            option::{SocketOption, TcpSocketOptions},
+            SocketId,
         },
         SharedDemiRuntime, SharedObject,
     },

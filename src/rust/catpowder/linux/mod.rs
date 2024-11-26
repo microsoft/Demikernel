@@ -12,12 +12,12 @@ use crate::{
     demi_sgarray_t, demi_sgaseg_t,
     demikernel::config::Config,
     expect_ok,
-    inetstack::protocols::{layer1::PhysicalLayer, layer2::Ethernet2Header, MAX_HEADER_SIZE},
+    inetstack::consts::{MAX_HEADER_SIZE, RECEIVE_BATCH_SIZE},
+    inetstack::protocols::{layer1::PhysicalLayer, layer2::Ethernet2Header},
     runtime::{
         fail::Fail,
         limits,
         memory::{DemiBuffer, MemoryRuntime},
-        network::consts::RECEIVE_BATCH_SIZE,
         Runtime, SharedObject,
     },
 };

@@ -7,19 +7,20 @@
 
 use crate::{
     collections::{async_queue::SharedAsyncQueue, async_value::SharedAsyncValue},
-    inetstack::protocols::{
-        layer3::SharedLayer3Endpoint,
-        layer4::tcp::{
-            established::{rto::RtoCalculator, ControlBlock},
-            header::TcpHeader,
-            SeqNumber,
+    inetstack::{
+        consts::MAX_HEADER_SIZE,
+        protocols::{
+            layer3::SharedLayer3Endpoint,
+            layer4::tcp::{
+                established::{rto::RtoCalculator, ControlBlock},
+                header::TcpHeader,
+                SeqNumber,
+            },
         },
-        MAX_HEADER_SIZE,
     },
     runtime::{conditional_yield_until, fail::Fail, memory::DemiBuffer, SharedDemiRuntime},
 };
 use ::futures::{never::Never, pin_mut, select_biased, FutureExt};
-use ::libc::{EBUSY, EINVAL};
 use ::std::{
     cmp, fmt,
     net::Ipv4Addr,
@@ -218,21 +219,10 @@ impl Sender {
     ) -> Result<(), Fail> {
         // If the user is done sending (i.e. has called close on this connection), then they shouldn't be sending.
         debug_assert!(cb.sender.fin_seq_no.is_none());
-        // Our API supports send buffers up to usize (variable, depends upon architecture) in size.  While we could
-        // allow for larger send buffers, it is simpler and more practical to limit a single send to 1 GiB, which is
-        // also the maximum value a TCP can advertise as its receive window (with maximum window scaling).
-        // TODO: the below check just limits a single send to 4 GiB, not 1 GiB.  Check this doesn't break anything.
-        //
-        // Review: Move this check up the stack (i.e. closer to the user)?
-        //
-        let _: u32 = buf
-            .len()
-            .try_into()
-            .map_err(|_| Fail::new(EINVAL, "buffer too large"))?;
 
         // TODO: We need to fix this the correct way: limit our send buffer size to the amount we're willing to buffer.
         if cb.sender.unsent_queue.len() > UNSENT_QUEUE_CUTOFF {
-            return Err(Fail::new(EBUSY, "too many packets to send"));
+            return Err(Fail::new(libc::EBUSY, "too many packets to send"));
         }
 
         // Place the buffer in the unsent queue.
@@ -259,7 +249,7 @@ impl Sender {
         debug_assert!(cb.sender.fin_seq_no.is_none());
         // TODO: We need to fix this the correct way: limit our send buffer size to the amount we're willing to buffer.
         if cb.sender.unsent_queue.len() > UNSENT_QUEUE_CUTOFF {
-            return Err(Fail::new(EBUSY, "too many packets to send"));
+            return Err(Fail::new(libc::EBUSY, "too many packets to send"));
         }
 
         cb.sender.fin_seq_no = Some(cb.sender.unsent_next_seq_no);

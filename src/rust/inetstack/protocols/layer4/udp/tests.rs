@@ -3,7 +3,7 @@
 
 use crate::{
     inetstack::{
-        protocols::MAX_HEADER_SIZE,
+        consts::MAX_HEADER_SIZE,
         test_helpers::{
             self,
             engine::{SharedEngine, TIMEOUT_SECONDS},

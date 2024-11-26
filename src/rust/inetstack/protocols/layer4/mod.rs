@@ -14,23 +14,26 @@ pub mod udp;
 //======================================================================================================================
 
 #[cfg(test)]
-use crate::runtime::network::types::MacAddress;
+use crate::inetstack::types::MacAddress;
 use crate::{
     demi_sgarray_t,
     demikernel::config::Config,
     expect_some,
-    inetstack::protocols::{
-        layer3::{ip::IpProtocol, SharedLayer3Endpoint},
-        layer4::{
-            ephemeral::EphemeralPorts,
-            tcp::{SharedTcpPeer, SharedTcpSocket},
-            udp::{SharedUdpPeer, SharedUdpSocket},
+    inetstack::{
+        consts::RECEIVE_BATCH_SIZE,
+        protocols::{
+            layer3::{ip::IpProtocol, SharedLayer3Endpoint},
+            layer4::{
+                ephemeral::EphemeralPorts,
+                tcp::{SharedTcpPeer, SharedTcpSocket},
+                udp::{SharedUdpPeer, SharedUdpSocket},
+            },
         },
     },
     runtime::{
         fail::Fail,
         memory::{DemiBuffer, MemoryRuntime},
-        network::{consts::RECEIVE_BATCH_SIZE, unwrap_socketaddr},
+        network::unwrap_socketaddr,
         SharedDemiRuntime,
     },
     timer, SocketOption,
