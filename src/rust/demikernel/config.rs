@@ -69,6 +69,19 @@ mod raw_socket_config {
     // we need to listen to the corresponding VF interface as well.
     #[cfg(target_os = "windows")]
     pub const LOCAL_VF_INTERFACE_INDEX: &str = "xdp_vf_interface_index";
+
+    // Whether XDP should support its cohosting mode, wherein it will only redirect ports specified
+    // in environmental variables.
+    #[cfg(target_os = "windows")]
+    pub const XDP_COHOST_MODE: &str = "xdp_cohost_mode";
+
+    // TCP ports for XDP to redirect when cohosting.
+    #[cfg(target_os = "windows")]
+    pub const XDP_TCP_PORTS: &str = "xdp_tcp_ports";
+
+    // UDP ports for XDP to redirect when cohosting.
+    #[cfg(target_os = "windows")]
+    pub const XDP_UDP_PORTS: &str = "xdp_udp_ports";
 }
 
 //======================================================================================================================
@@ -311,6 +324,39 @@ impl Config {
         }
     }
 
+    #[cfg(all(feature = "catpowder-libos", target_os = "windows"))]
+    pub fn xdp_cohost_mode(&self) -> Result<bool, Fail> {
+        if let Some(enabled) = Self::get_typed_env_option(raw_socket_config::XDP_COHOST_MODE)? {
+            Ok(enabled)
+        } else {
+            Self::get_bool_option(self.get_raw_socket_config()?, raw_socket_config::XDP_COHOST_MODE)
+        }
+    }
+
+    #[cfg(all(feature = "catpowder-libos", target_os = "windows"))]
+    pub fn xdp_cohost_ports(&self) -> Result<(Vec<u16>, Vec<u16>), Fail> {
+        let parse_ports = |key: &str| -> Result<Vec<u16>, Fail> {
+            if let Some(ports) = Self::get_env_option(key) {
+                Self::parse_array::<u16>(ports.as_str())
+            } else {
+                Self::get_typed_option(self.get_raw_socket_config()?, key, Yaml::as_vec)?
+                    .iter()
+                    .map(|port: &Yaml| {
+                        port.as_i64()
+                            .ok_or(Fail::new(libc::EINVAL, "Invalid port number"))
+                            .and_then(|val: i64| {
+                                u16::try_from(val).map_err(|_| Fail::new(libc::ERANGE, "Port number out of range"))
+                            })
+                    })
+                    .collect::<Result<Vec<u16>, _>>()
+            }
+        };
+
+        let tcp_ports: Vec<u16> = parse_ports(raw_socket_config::XDP_TCP_PORTS)?;
+        let udp_ports: Vec<u16> = parse_ports(raw_socket_config::XDP_UDP_PORTS)?;
+        Ok((tcp_ports, udp_ports))
+    }
+
     #[cfg(feature = "catnip-libos")]
     /// DPDK Config: Reads the "DPDK EAL" parameter the underlying configuration file.
     pub fn eal_init_args(&self) -> Result<Vec<CString>, Fail> {
@@ -426,17 +472,20 @@ impl Config {
         Err(Fail::new(libc::EINVAL, message.as_str()))
     }
 
+    fn get_env_option(index: &str) -> Option<String> {
+        ::std::env::var(index.to_uppercase()).ok()
+    }
+
     /// Get value where the environment value overrides the config file if it exists.
     fn get_typed_env_option<T: FromStr>(index: &str) -> Result<Option<T>, Fail> {
-        if let Ok(var) = ::std::env::var(index.to_uppercase()) {
-            if let Ok(value) = var.as_str().parse() {
-                return Ok(Some(value));
-            } else {
-                let message: String = format!("parameter {} has unexpected type", index);
-                return Err(Fail::new(libc::EINVAL, message.as_str()));
-            }
-        }
-        Ok(None)
+        Self::get_env_option(index)
+            .map(|val: String| -> Result<T, Fail> {
+                val.as_str().parse().map_err(|_| {
+                    let message: String = format!("parameter {} has unexpected type", index);
+                    Fail::new(libc::EINVAL, message.as_str())
+                })
+            })
+            .transpose()
     }
 
     /// Similar to `require_typed_option` using `Yaml::as_i64` as the receiver, but additionally verifies that the
@@ -455,5 +504,43 @@ impl Config {
     /// Same as `Self::require_typed_option` using `Yaml::as_bool` as the receiver.
     fn get_bool_option(yaml: &Yaml, index: &str) -> Result<bool, Fail> {
         Self::get_typed_option(yaml, index, &Yaml::as_bool)
+    }
+
+    /// Parse a comma-separated array of elements into a Vec.
+    #[allow(dead_code)]
+    fn parse_array<T: FromStr>(value: &str) -> Result<Vec<T>, Fail> {
+        value
+            .split(',')
+            .map(|s: &str| s.trim().parse::<T>())
+            .collect::<Result<Vec<T>, <T as FromStr>::Err>>()
+            .map_err(|_| Fail::new(libc::EINVAL, "failed to parse array"))
+    }
+}
+
+//======================================================================================================================
+// Unit Tests
+//======================================================================================================================
+
+#[cfg(test)]
+mod test {
+    use std::net::Ipv4Addr;
+
+    use anyhow::ensure;
+
+    use crate::demikernel::config::Config;
+
+    #[test]
+    fn test_parse_array() -> anyhow::Result<()> {
+        ensure!(vec![1, 2, 3] == vec![1, 2, 3]);
+        ensure!(Config::parse_array::<u32>("1,2,3")? == vec![1, 2, 3]);
+        ensure!(Config::parse_array::<u32>("1,,3").is_err());
+        ensure!(Config::parse_array::<bool>("  true\t,\tfalse ")? == vec![true, false]);
+        ensure!(Config::parse_array::<i16>(",1").is_err());
+        ensure!(Config::parse_array::<i16>("1,").is_err());
+
+        ensure!(
+            Config::parse_array::<Ipv4Addr>("127.0.0.1 , 0.0.0.0")? == vec![Ipv4Addr::LOCALHOST, Ipv4Addr::UNSPECIFIED]
+        );
+        Ok(())
     }
 }
