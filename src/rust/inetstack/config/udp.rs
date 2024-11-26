@@ -58,7 +58,7 @@ impl Default for UdpConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::network::config::UdpConfig;
+    use crate::inetstack::config::UdpConfig;
     use ::anyhow::Result;
 
     #[test]

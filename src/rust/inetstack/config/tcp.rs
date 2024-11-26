@@ -7,10 +7,8 @@
 
 use crate::{
     demikernel::config::Config,
-    runtime::{
-        fail::Fail,
-        network::consts::{DEFAULT_MSS, MAX_MSS, MIN_MSS, TCP_ACK_DELAY_TIMEOUT, TCP_HANDSHAKE_TIMEOUT},
-    },
+    inetstack::consts::{DEFAULT_MSS, MAX_MSS, MIN_MSS, TCP_ACK_DELAY_TIMEOUT, TCP_HANDSHAKE_TIMEOUT},
+    runtime::fail::Fail,
 };
 use ::std::time::Duration;
 
@@ -111,7 +109,7 @@ impl Default for TcpConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::network::{config::TcpConfig, consts::DEFAULT_MSS};
+    use crate::inetstack::{config::TcpConfig, consts::DEFAULT_MSS};
     use ::anyhow::Result;
     use ::std::time::Duration;
 

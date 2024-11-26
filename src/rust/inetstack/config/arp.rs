@@ -5,10 +5,7 @@
 // Imports
 //======================================================================================================================
 
-use crate::{
-    demikernel::config::Config,
-    runtime::{fail::Fail, network::types::MacAddress},
-};
+use crate::{demikernel::config::Config, inetstack::types::MacAddress, runtime::fail::Fail};
 use ::std::{collections::HashMap, net::Ipv4Addr, time::Duration};
 
 //======================================================================================================================
@@ -93,7 +90,7 @@ impl Default for ArpConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::network::config::ArpConfig;
+    use crate::inetstack::config::ArpConfig;
     use ::anyhow::Result;
     use ::std::{collections::HashMap, time::Duration};
 

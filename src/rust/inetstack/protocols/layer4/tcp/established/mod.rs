@@ -10,20 +10,22 @@ mod sender;
 use crate::{
     async_timer,
     collections::async_queue::SharedAsyncQueue,
-    inetstack::protocols::{
-        layer3::SharedLayer3Endpoint,
-        layer4::tcp::{
-            congestion_control::CongestionControlConstructor,
-            established::{ctrlblk::ControlBlock, ctrlblk::State, receiver::Receiver, sender::Sender},
-            header::TcpHeader,
-            SeqNumber,
+    inetstack::{
+        config::TcpConfig,
+        consts::MSL,
+        protocols::{
+            layer3::SharedLayer3Endpoint,
+            layer4::tcp::{
+                congestion_control::CongestionControlConstructor,
+                established::{ctrlblk::ControlBlock, ctrlblk::State, receiver::Receiver, sender::Sender},
+                header::TcpHeader,
+                SeqNumber,
+            },
         },
     },
     runtime::{
-        fail::Fail,
-        memory::DemiBuffer,
-        network::{config::TcpConfig, consts::MSL, socket::option::TcpSocketOptions},
-        yield_with_timeout, SharedDemiRuntime, SharedObject,
+        fail::Fail, memory::DemiBuffer, network::socket::option::TcpSocketOptions, yield_with_timeout,
+        SharedDemiRuntime, SharedObject,
     },
 };
 use ::futures::pin_mut;

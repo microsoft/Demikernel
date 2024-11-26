@@ -12,9 +12,10 @@ use crate::{
             layer3::arp::header::{ArpHeader, ArpOperation},
         },
         test_helpers::{self, SharedEngine, SharedTestPhysicalLayer},
+        types::MacAddress,
         SharedInetStack,
     },
-    runtime::{memory::DemiBuffer, network::types::MacAddress},
+    runtime::memory::DemiBuffer,
 };
 use ::anyhow::Result;
 use ::futures::FutureExt;

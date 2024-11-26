@@ -6,11 +6,14 @@
 //======================================================================================================================
 
 #[cfg(test)]
-use crate::runtime::network::types::MacAddress;
+use crate::inetstack::types::MacAddress;
 use crate::{
     demi_sgarray_t,
     demikernel::config::Config,
-    inetstack::protocols::layer4::{Peer, Socket},
+    inetstack::{
+        consts::MAX_RECV_ITERS,
+        protocols::layer4::{Peer, Socket},
+    },
     runtime::{
         fail::Fail,
         memory::{DemiBuffer, MemoryRuntime},
@@ -39,14 +42,11 @@ use crate::timer;
 #[cfg(test)]
 pub mod test_helpers;
 
+pub mod config;
+pub mod consts;
 pub mod options;
 pub mod protocols;
-
-//======================================================================================================================
-// Constants
-//======================================================================================================================
-
-const MAX_RECV_ITERS: usize = 2;
+pub mod types;
 
 //======================================================================================================================
 // Structures

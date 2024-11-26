@@ -12,10 +12,10 @@ use arrayvec::ArrayVec;
 // Imports
 //======================================================================================================================
 
+use crate::inetstack::consts::RECEIVE_BATCH_SIZE;
 use crate::runtime::{
     fail::Fail,
     memory::{DemiBuffer, MemoryRuntime},
-    network::consts::RECEIVE_BATCH_SIZE,
 };
 
 //======================================================================================================================

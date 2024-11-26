@@ -5,20 +5,18 @@ use crate::{
     collections::async_queue::AsyncQueue,
     demikernel::config::Config,
     expect_ok,
-    inetstack::protocols::{
-        layer2::SharedLayer2Endpoint,
-        layer3::arp::{
-            cache::ArpCache,
-            header::{ArpHeader, ArpOperation},
+    inetstack::{
+        config::ArpConfig,
+        protocols::{
+            layer2::SharedLayer2Endpoint,
+            layer3::arp::{
+                cache::ArpCache,
+                header::{ArpHeader, ArpOperation},
+            },
         },
+        types::MacAddress,
     },
-    runtime::{
-        conditional_yield_with_timeout,
-        fail::Fail,
-        memory::DemiBuffer,
-        network::{config::ArpConfig, types::MacAddress},
-        SharedDemiRuntime, SharedObject,
-    },
+    runtime::{conditional_yield_with_timeout, fail::Fail, memory::DemiBuffer, SharedDemiRuntime, SharedObject},
 };
 use ::futures::{
     channel::oneshot::{channel, Receiver, Sender},

@@ -6,8 +6,8 @@
 //======================================================================================================================
 
 use crate::{
-    inetstack::protocols::layer2::EtherType2,
-    runtime::{fail::Fail, memory::DemiBuffer, network::types::MacAddress},
+    inetstack::{protocols::layer2::EtherType2, types::MacAddress},
+    runtime::{fail::Fail, memory::DemiBuffer},
 };
 use ::libc::EBADMSG;
 

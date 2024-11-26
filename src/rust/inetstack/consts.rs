@@ -5,6 +5,7 @@
 // Imports
 //======================================================================================================================
 
+use crate::inetstack::protocols::*;
 use ::std::time::Duration;
 
 //======================================================================================================================
@@ -44,3 +45,9 @@ pub const RECEIVE_BATCH_SIZE: usize = 4;
 /// Maximum local and remote window scaling factor.
 /// See: RFC 1323, Section 2.3.
 pub const MAX_WINDOW_SCALE: usize = 14;
+
+// Maximum header size of all possible headers.
+pub const MAX_HEADER_SIZE: usize =
+    layer4::tcp::MAX_TCP_HEADER_SIZE + layer3::ipv4::IPV4_HEADER_MAX_SIZE as usize + layer2::ETHERNET2_HEADER_SIZE;
+
+pub const MAX_RECV_ITERS: usize = 2;

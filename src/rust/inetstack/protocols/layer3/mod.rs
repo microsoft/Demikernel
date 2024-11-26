@@ -17,11 +17,13 @@ pub use self::{arp::SharedArpPeer, icmpv4::SharedIcmpv4Peer, ip::IpProtocol, ipv
 use crate::{
     demi_sgarray_t,
     demikernel::config::Config,
-    inetstack::protocols::layer2::{EtherType2, SharedLayer2Endpoint},
+    inetstack::{
+        consts::RECEIVE_BATCH_SIZE,
+        protocols::layer2::{EtherType2, SharedLayer2Endpoint},
+    },
     runtime::{
         fail::Fail,
         memory::{DemiBuffer, MemoryRuntime},
-        network::consts::RECEIVE_BATCH_SIZE,
         SharedDemiRuntime, SharedObject,
     },
     MacAddress,

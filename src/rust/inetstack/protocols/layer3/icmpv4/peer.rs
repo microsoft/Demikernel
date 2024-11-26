@@ -4,21 +4,24 @@
 use crate::{
     collections::async_queue::AsyncQueue,
     demikernel::config::Config,
-    inetstack::protocols::{
-        layer2::{SharedLayer2Endpoint, ETHERNET2_HEADER_SIZE},
-        layer3::{
-            arp::SharedArpPeer,
-            icmpv4::{
-                header::{Icmpv4Header, ICMPV4_HEADER_SIZE},
-                protocol::{Icmpv4Type2, ICMPV4_ECHO_REQUEST_MESSAGE_SIZE},
+    inetstack::{
+        protocols::{
+            layer2::{SharedLayer2Endpoint, ETHERNET2_HEADER_SIZE},
+            layer3::{
+                arp::SharedArpPeer,
+                icmpv4::{
+                    header::{Icmpv4Header, ICMPV4_HEADER_SIZE},
+                    protocol::{Icmpv4Type2, ICMPV4_ECHO_REQUEST_MESSAGE_SIZE},
+                },
+                ip::IpProtocol,
+                ipv4::{Ipv4Header, IPV4_HEADER_MIN_SIZE},
             },
-            ip::IpProtocol,
-            ipv4::{Ipv4Header, IPV4_HEADER_MIN_SIZE},
         },
+        types::MacAddress,
     },
     runtime::{
-        conditional_yield_with_timeout, fail::Fail, memory::DemiBuffer, network::types::MacAddress,
-        SharedConditionVariable, SharedDemiRuntime, SharedObject,
+        conditional_yield_with_timeout, fail::Fail, memory::DemiBuffer, SharedConditionVariable, SharedDemiRuntime,
+        SharedObject,
     },
 };
 use ::futures::FutureExt;

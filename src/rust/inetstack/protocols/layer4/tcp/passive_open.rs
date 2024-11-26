@@ -11,25 +11,24 @@ use crate::{
         async_value::SharedAsyncValue,
     },
     expect_some,
-    inetstack::protocols::{
-        layer3::SharedLayer3Endpoint,
-        layer4::tcp::{
-            constants::FALLBACK_MSS,
-            established::{
-                congestion_control::{self, CongestionControl},
-                SharedEstablishedSocket,
+    inetstack::{
+        config::TcpConfig,
+        consts::{FALLBACK_MSS, MAX_HEADER_SIZE, MAX_WINDOW_SCALE},
+        protocols::{
+            layer3::SharedLayer3Endpoint,
+            layer4::tcp::{
+                established::{
+                    congestion_control::{self, CongestionControl},
+                    SharedEstablishedSocket,
+                },
+                header::{TcpHeader, TcpOptions2},
+                isn_generator::IsnGenerator,
+                SeqNumber,
             },
-            header::{TcpHeader, TcpOptions2},
-            isn_generator::IsnGenerator,
-            SeqNumber,
         },
-        MAX_HEADER_SIZE,
     },
     runtime::{
-        conditional_yield_with_timeout,
-        fail::Fail,
-        memory::DemiBuffer,
-        network::{config::TcpConfig, consts::MAX_WINDOW_SCALE, socket::option::TcpSocketOptions},
+        conditional_yield_with_timeout, fail::Fail, memory::DemiBuffer, network::socket::option::TcpSocketOptions,
         SharedDemiRuntime, SharedObject,
     },
 };
