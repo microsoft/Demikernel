@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-name: Main Catnapw
+name: Catnap + Catpowder (Windows Kernel and XDP)
 
 concurrency:
   group: catnapw
@@ -26,7 +26,7 @@ env:
 jobs:
 
   debug-pipeline:
-    name: Debug Pipeline
+    name: Catnap Debug Pipeline (Windows Kernel)
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -70,13 +70,13 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: debug-pipeline-logs
+        name: catnapw-debug-pipeline-logs
         path: |
           **/*.stdout.txt
           **/*.stderr.txt
 
   release-pipeline:
-    name: Release Pipeline
+    name: Catnap Release Pipeline (Windows Kernel)
     needs: debug-pipeline
     runs-on: ubuntu-latest
     steps:
@@ -120,13 +120,13 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: release-pipeline-logs
+        name: catnapw-release-pipeline-logs
         path: |
           **/*.stdout.txt
           **/*.stderr.txt
 
   catpowder-debug-pipeline:
-    name: Catpowder Debug Pipeline
+    name: Catpowder Debug Pipeline (Windows XDP)
     needs: release-pipeline
     runs-on: ubuntu-latest
     steps:
@@ -177,7 +177,7 @@ jobs:
           **/*.stderr.txt
 
   catpowder-release-pipeline:
-    name: Catpowder Release Pipeline
+    name: Catpowder Release Pipeline (Windows XDP)
     needs: catpowder-debug-pipeline
     runs-on: ubuntu-latest
     steps:
