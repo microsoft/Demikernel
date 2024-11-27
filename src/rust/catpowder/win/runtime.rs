@@ -23,9 +23,9 @@ use crate::{
         Runtime, SharedObject,
     },
 };
-use ::arrayvec::ArrayVec;
-use ::libc::c_void;
-use ::std::{borrow::BorrowMut, mem};
+use arrayvec::ArrayVec;
+use libc::c_void;
+use std::{borrow::BorrowMut, mem};
 use windows::Win32::{
     Foundation::ERROR_INSUFFICIENT_BUFFER,
     System::SystemInformation::{
