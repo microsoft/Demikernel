@@ -362,8 +362,8 @@ impl SharedPassiveSocket {
         remote: SocketAddrV4,
         local_isn: SeqNumber,
         remote_isn: SeqNumber,
-        header_window_size: u16,
-        remote_window_scale: Option<u8>,
+        remote_window_size_bytes: u16,
+        remote_window_scale_bits: Option<u8>,
         mss: usize,
     ) -> Result<SharedEstablishedSocket, Fail> {
         let (ipv4_hdr, tcp_hdr, buf) = recv_queue.pop(None).await?;
@@ -375,7 +375,7 @@ impl SharedPassiveSocket {
         }
 
         // Calculate the window.
-        let (local_window_scale, remote_window_scale): (u8, u8) = match remote_window_scale {
+        let (local_window_scale_bits, remote_window_scale_bits): (u8, u8) = match remote_window_scale_bits {
             Some(remote_window_scale) => {
                 if (remote_window_scale as usize) > MAX_WINDOW_SCALE {
                     warn!(
@@ -391,25 +391,25 @@ impl SharedPassiveSocket {
         };
 
         // Expect is safe here because the window size is a 16-bit unsigned integer and MAX_WINDOW_SCALE is 14, so it is impossible to overflow the 32-bit
-        debug_assert!((remote_window_scale as usize) <= MAX_WINDOW_SCALE);
-        let remote_window_size: u32 = expect_some!(
-            (header_window_size as u32).checked_shl(remote_window_scale as u32),
+        debug_assert!((remote_window_scale_bits as usize) <= MAX_WINDOW_SCALE);
+        let remote_window_size_bytes: u32 = expect_some!(
+            (remote_window_size_bytes as u32).checked_shl(remote_window_scale_bits as u32),
             "Window size overflow"
         );
         // Expect is safe here because the receive window size is a 16-bit unsigned integer and MAX_WINDOW_SCALE is 14,
         // so it is impossible to overflow the 32-bit unsigned int.
-        debug_assert!((local_window_scale as usize) <= MAX_WINDOW_SCALE);
-        let local_window_size: u32 = expect_some!(
-            (self.tcp_config.get_receive_window_size() as u32).checked_shl(local_window_scale as u32),
+        debug_assert!((local_window_scale_bits as usize) <= MAX_WINDOW_SCALE);
+        let local_window_size_bytes: u32 = expect_some!(
+            (self.tcp_config.get_receive_window_size() as u32).checked_shl(local_window_scale_bits as u32),
             "Window size overflow"
         );
         info!(
-            "Window sizes: local {}, remote {}",
-            local_window_size, remote_window_size
+            "Window sizes: local {} bytes, remote {} bytes",
+            local_window_size_bytes, remote_window_size_bytes
         );
         info!(
             "Window scale: local {}, remote {}",
-            local_window_scale, remote_window_scale
+            local_window_scale_bits, remote_window_scale_bits
         );
 
         // If there is data with the SYN+ACK, deliver it.
@@ -427,11 +427,11 @@ impl SharedPassiveSocket {
             self.socket_options,
             remote_isn + SeqNumber::from(1),
             self.tcp_config.get_ack_delay_timeout(),
-            local_window_size,
-            local_window_scale,
+            local_window_size_bytes,
+            local_window_scale_bits,
             local_isn + SeqNumber::from(1),
-            remote_window_size,
-            remote_window_scale,
+            remote_window_size_bytes,
+            remote_window_scale_bits,
             mss,
             congestion_control::None::new,
             None,
@@ -441,6 +441,7 @@ impl SharedPassiveSocket {
     }
 
     fn complete_handshake(&mut self, remote: SocketAddrV4, result: Result<SharedEstablishedSocket, Fail>) {
+        warn!("completing handshake");
         self.connections.remove(&remote);
         self.ready.push((remote, result));
     }
