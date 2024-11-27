@@ -7,17 +7,19 @@
 // Imports
 //======================================================================================================================
 
-use crate::{perftools::profiler::PROFILER, runtime::types::demi_callback_t};
+use crate::{
+    perftools::profiler::THREAD_LOCAL_PROFILER,
+    runtime::{types::demi_callback_t, SharedObject},
+};
 use ::std::{
-    cell::RefCell,
     fmt::{self, Debug},
     future::Future,
     io,
     pin::Pin,
-    rc::Rc,
     task::{Context, Poll},
     thread,
 };
+use std::ops::{Deref, DerefMut};
 
 //======================================================================================================================
 // Structures
@@ -30,10 +32,10 @@ pub struct Scope {
     name: &'static str,
 
     /// Parent scope in the tree. Root scopes have no parent.
-    pred: Option<Rc<RefCell<Scope>>>,
+    parent: Option<SharedScope>,
 
     /// Child scopes in the tree.
-    succs: Vec<Rc<RefCell<Scope>>>,
+    children: Vec<SharedScope>,
 
     /// Callback to report statistics. If this is set to None, we collect averages by default.
     perf_callback: Option<demi_callback_t>,
@@ -52,40 +54,43 @@ pub struct Guard {
 
 /// A scope over an async block that may yield and re-enter several times.
 pub struct AsyncScope<'a, F: Future> {
-    scope: Rc<RefCell<Scope>>,
+    scope: SharedScope,
     future: Pin<&'a mut F>,
 }
+
+#[derive(Clone)]
+pub struct SharedScope(SharedObject<Scope>);
 
 //======================================================================================================================
 // Associated Functions
 //======================================================================================================================
 
-impl Scope {
-    pub fn new(name: &'static str, pred: Option<Rc<RefCell<Scope>>>, perf_callback: Option<demi_callback_t>) -> Scope {
-        Scope {
+impl SharedScope {
+    pub fn new(name: &'static str, parent: Option<SharedScope>, perf_callback: Option<demi_callback_t>) -> SharedScope {
+        Self(SharedObject::new(Scope {
             name,
-            pred,
-            succs: Vec::new(),
+            parent,
+            children: Vec::new(),
             num_calls: 0,
             duration_sum: 0,
             perf_callback,
-        }
+        }))
     }
 
     pub fn get_name(&self) -> &'static str {
         self.name
     }
 
-    pub fn get_pred(&self) -> &Option<Rc<RefCell<Scope>>> {
-        &self.pred
+    pub fn get_parent(&self) -> &Option<SharedScope> {
+        &self.parent
     }
 
-    pub fn get_succs(&self) -> &Vec<Rc<RefCell<Scope>>> {
-        &self.succs
+    pub fn get_children(&self) -> &Vec<SharedScope> {
+        &self.children
     }
 
-    pub fn add_succ(&mut self, succ: Rc<RefCell<Scope>>) {
-        self.succs.push(succ.clone())
+    pub fn add_child(&mut self, child: SharedScope) {
+        self.children.push(child)
     }
 
     #[cfg(test)]
@@ -135,11 +140,11 @@ impl Scope {
 
         let total_duration_secs = (total_duration) as f64;
         let duration_sum_secs = (self.duration_sum) as f64;
-        let pred_sum_secs = self
-            .pred
+        let parent_sum_secs = self
+            .parent
             .clone()
-            .map_or(total_duration_secs, |pred| (pred.borrow().duration_sum) as f64);
-        let percent_time = duration_sum_secs / pred_sum_secs * 100.0;
+            .map_or(total_duration_secs, |child| (child.duration_sum) as f64);
+        let percent_time = duration_sum_secs / parent_sum_secs * 100.0;
 
         // Write markers.
         let mut markers = String::from("+");
@@ -157,9 +162,8 @@ impl Scope {
         )?;
 
         // Write children
-        for succ in &self.succs {
-            succ.borrow()
-                .write_recursive(out, thread_id, total_duration, depth + 1, max_depth, ns_per_cycle)?;
+        for child in &self.children {
+            child.write_recursive(out, thread_id, total_duration, depth + 1, max_depth, ns_per_cycle)?;
         }
 
         Ok(())
@@ -167,7 +171,7 @@ impl Scope {
 }
 
 impl<'a, F: Future> AsyncScope<'a, F> {
-    pub fn new(scope: Rc<RefCell<Scope>>, future: Pin<&'a mut F>) -> Self {
+    pub fn new(scope: SharedScope, future: Pin<&'a mut F>) -> Self {
         Self { scope, future }
     }
 }
@@ -184,7 +188,21 @@ impl Guard {
 // Trait Implementations
 //======================================================================================================================
 
-impl Debug for Scope {
+impl Deref for SharedScope {
+    type Target = Scope;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
+impl DerefMut for SharedScope {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.deref_mut()
+    }
+}
+
+impl Debug for SharedScope {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
     }
@@ -196,7 +214,7 @@ impl<'a, F: Future> Future for AsyncScope<'a, F> {
     fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
         let self_: &mut Self = self.get_mut();
 
-        let _guard = PROFILER.with(|p| p.borrow_mut().enter_scope(self_.scope.clone()));
+        let _guard = THREAD_LOCAL_PROFILER.with(|p| p.clone().enter_scope(self_.scope.clone()));
         Future::poll(self_.future.as_mut(), ctx)
     }
 }
@@ -207,6 +225,6 @@ impl Drop for Guard {
         let (now, _): (u64, u32) = unsafe { x86::time::rdtscp() };
         let duration: u64 = now - self.enter_time;
 
-        PROFILER.with(|p| p.borrow_mut().leave_scope(duration));
+        THREAD_LOCAL_PROFILER.with(|p| p.clone().leave_scope(duration));
     }
 }

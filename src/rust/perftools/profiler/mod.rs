@@ -17,18 +17,20 @@ mod tests;
 //======================================================================================================================
 
 use crate::{
-    perftools::profiler::scope::{Guard, Scope},
-    runtime::types::demi_callback_t,
+    perftools::profiler::scope::Guard,
+    runtime::{types::demi_callback_t, SharedObject},
 };
 use ::futures::future::FusedFuture;
 use ::std::{
-    cell::RefCell,
     io,
     pin::Pin,
-    rc::Rc,
     time::{Duration, SystemTime},
 };
-use std::thread;
+use scope::SharedScope;
+use std::{
+    ops::{Deref, DerefMut},
+    thread,
+};
 
 //======================================================================================================================
 // Structures
@@ -39,7 +41,7 @@ const SAMPLE_SIZE: usize = 16641;
 
 thread_local!(
     /// Global thread-local instance of the profiler.
-    pub static PROFILER: RefCell<Profiler> = RefCell::new(Profiler::new())
+    pub static THREAD_LOCAL_PROFILER: SharedProfiler = SharedProfiler::new();
 );
 
 /// A `Profiler` stores the scope tree and keeps track of the currently active
@@ -49,13 +51,16 @@ thread_local!(
 /// [`PROFILER`](constant.PROFILER.html), so it is not possible to manually
 /// create an instance of `Profiler`.
 pub struct Profiler {
-    roots: Vec<Rc<RefCell<Scope>>>,
-    current: Option<Rc<RefCell<Scope>>>,
+    root_scopes: Vec<SharedScope>,
+    current_scope: Option<SharedScope>,
     ns_per_cycle: f64,
     perf_callback: Option<demi_callback_t>,
     #[cfg(feature = "auto-calibrate")]
     clock_drift: u64,
 }
+
+#[derive(Clone)]
+pub struct SharedProfiler(SharedObject<Profiler>);
 
 //======================================================================================================================
 // Associated Functions
@@ -70,28 +75,28 @@ pub struct Profiler {
 /// all code that runs in your program, the printed frequencies will be
 /// overestimated.
 pub fn write<W: io::Write>(out: &mut W, max_depth: Option<usize>) -> io::Result<()> {
-    PROFILER.with(|p| p.borrow().write(out, max_depth))
+    THREAD_LOCAL_PROFILER.with(|p| p.write(out, max_depth))
 }
 
 /// Reset profiling information.
 pub fn reset() {
-    PROFILER.with(|p| p.borrow_mut().reset());
+    THREAD_LOCAL_PROFILER.with(|p| p.clone().reset());
 }
 
 pub fn set_callback(perf_callback: demi_callback_t) {
-    PROFILER.with(|p| p.borrow_mut().set_callback(perf_callback));
+    THREAD_LOCAL_PROFILER.with(|p| p.clone().set_callback(perf_callback));
 }
 
-impl Profiler {
-    fn new() -> Profiler {
-        Profiler {
-            roots: Vec::new(),
-            current: None,
+impl SharedProfiler {
+    pub fn new() -> Self {
+        Self(SharedObject::new(Profiler {
+            root_scopes: Vec::new(),
+            current_scope: None,
             ns_per_cycle: Self::measure_ns_per_cycle(),
             perf_callback: None,
             #[cfg(feature = "auto-calibrate")]
             clock_drift: Self::clock_drift(SAMPLE_SIZE),
-        }
+        }))
     }
 
     /// Set a callback and stop collecting statistics.
@@ -107,7 +112,7 @@ impl Profiler {
     /// directly.
     #[inline]
     pub fn sync_scope(&mut self, name: &'static str) -> Guard {
-        let scope = self.get_scope(name);
+        let scope = self.get_or_add_scope(name);
         self.enter_scope(scope)
     }
 
@@ -116,68 +121,52 @@ impl Profiler {
     #[inline]
     pub async fn coroutine_scope<F: FusedFuture>(name: &'static str, mut coroutine: Pin<Box<F>>) -> F::Output {
         AsyncScope::new(
-            PROFILER.with(|p| p.borrow_mut().get_root_scope(name)),
+            THREAD_LOCAL_PROFILER.with(|p| p.clone().get_or_add_root_scope(name)),
             coroutine.as_mut(),
         )
         .await
     }
 
-    /// Looks up the scope at the root level using the name, creating a new one if not found.
-    fn get_root_scope(&mut self, name: &'static str) -> Rc<RefCell<Scope>> {
-        //Check if `name` already is a root.
-        let existing_root = self.roots.iter().find(|root| root.borrow().get_name() == name).cloned();
+    fn get_or_add_root_scope(&mut self, name: &'static str) -> SharedScope {
+        let existing_root = self.root_scopes.iter().find(|root| root.get_name() == name).cloned();
 
         existing_root.unwrap_or_else(|| {
-            // Add a new root node.
-            let new_scope: Scope = Scope::new(name, None, self.perf_callback);
-            let succ = Rc::new(RefCell::new(new_scope));
-
-            self.roots.push(succ.clone());
-
-            succ
+            let new_scope: SharedScope = SharedScope::new(name, None, self.perf_callback);
+            self.root_scopes.push(new_scope.clone());
+            new_scope
         })
     }
 
-    /// Look up the scope using the name.
-    pub fn get_scope(&mut self, name: &'static str) -> Rc<RefCell<Scope>> {
-        // Check if we have already registered `name` at the current point in
-        // the tree.
-        if let Some(current) = self.current.as_ref() {
-            // We are currently in some scope.
-            let existing_succ = current
-                .borrow()
-                .get_succs()
-                .iter()
-                .find(|succ| succ.borrow().get_name() == name)
-                .cloned();
+    pub fn get_or_add_scope(&mut self, name: &'static str) -> SharedScope {
+        match self.current_scope.as_ref() {
+            Some(current_scope) => {
+                let existing_scope = current_scope
+                    .get_children()
+                    .iter()
+                    .find(|child| child.get_name() == name)
+                    .cloned();
 
-            existing_succ.unwrap_or_else(|| {
-                // Add new successor node to the current node.
-                let new_scope: Scope = Scope::new(name, Some(current.clone()), self.perf_callback);
-                let succ = Rc::new(RefCell::new(new_scope));
-
-                current.borrow_mut().add_succ(succ.clone());
-
-                succ
-            })
-        } else {
-            // We are currently not within any scope.
-            self.get_root_scope(name)
+                existing_scope.unwrap_or_else(|| {
+                    let new_scope: SharedScope =
+                        SharedScope::new(name, Some(current_scope.clone()), self.perf_callback);
+                    current_scope.clone().add_child(new_scope.clone());
+                    new_scope
+                })
+            },
+            None => self.get_or_add_root_scope(name),
         }
     }
 
-    /// Actually enter a scope.
-    fn enter_scope(&mut self, scope: Rc<RefCell<Scope>>) -> Guard {
-        trace!("Entering scope: {}", scope.borrow().get_name());
-        let guard = scope.borrow_mut().enter();
-        self.current = Some(scope);
+    fn enter_scope(&mut self, mut scope: SharedScope) -> Guard {
+        trace!("Entering scope: {}", scope.get_name());
+        let guard = scope.enter();
+        self.current_scope = Some(scope);
 
         guard
     }
 
-    /// Completely reset profiling data.
     fn reset(&mut self) {
-        self.roots.clear();
+        self.root_scopes.clear();
 
         // Note that we could now still be anywhere in the previous profiling
         // tree, so we can not simply reset `self.current`. However, as the
@@ -188,18 +177,18 @@ impl Profiler {
     /// Leave the current scope.
     #[inline]
     fn leave_scope(&mut self, duration: u64) {
-        self.current = if let Some(current) = self.current.as_ref() {
+        self.current_scope = if let Some(current) = self.current_scope.as_ref() {
             cfg_if::cfg_if! {
                 if #[cfg(feature = "auto-calibrate")] {
                     let d = duration.checked_sub(self.clock_drift);
-                    current.borrow_mut().leave(d.unwrap_or(duration));
+                    current.clone().leave(d.unwrap_or(duration));
                 } else {
-                    current.borrow_mut().leave(duration);
+                    current.clone().leave(duration);
                 }
             }
 
             // Set current scope back to the parent node (if any).
-            current.borrow().get_pred().as_ref().cloned()
+            current.get_parent().as_ref().cloned()
         } else {
             // This should not happen with proper usage.
             log::error!("Called perftools::profiler::leave() while not in any scope");
@@ -209,16 +198,15 @@ impl Profiler {
     }
 
     fn write<W: io::Write>(&self, out: &mut W, max_depth: Option<usize>) -> io::Result<()> {
-        let total_duration = self.roots.iter().map(|root| root.borrow().get_duration_sum()).sum();
+        let total_duration = self.root_scopes.iter().map(|root| root.get_duration_sum()).sum();
         let thread_id: thread::ThreadId = thread::current().id();
 
         writeln!(
             out,
             "call_depth,thread_id,function_name,num_calls,percent_time,cycles_per_call,nanoseconds_per_call"
         )?;
-        for root in self.roots.iter() {
-            root.borrow()
-                .write_recursive(out, thread_id, total_duration, 0, max_depth, self.ns_per_cycle)?;
+        for root in self.root_scopes.iter() {
+            root.write_recursive(out, thread_id, total_duration, 0, max_depth, self.ns_per_cycle)?;
         }
 
         out.flush()
@@ -256,7 +244,21 @@ impl Profiler {
 // Trait Implementations
 //======================================================================================================================
 
-impl Drop for Profiler {
+impl Deref for SharedProfiler {
+    type Target = Profiler;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
+impl DerefMut for SharedProfiler {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.deref_mut()
+    }
+}
+
+impl Drop for SharedProfiler {
     fn drop(&mut self) {
         self.write(&mut std::io::stdout(), None)
             .expect("failed to write to stdout");

@@ -22,28 +22,26 @@ fn test_multiple_roots() -> Result<()> {
         }
     }
 
-    profiler::PROFILER.with(|p| -> Result<()> {
-        let p = p.borrow();
+    profiler::THREAD_LOCAL_PROFILER.with(|p| -> Result<()> {
+        crate::ensure_eq!(p.root_scopes.len(), 2);
 
-        crate::ensure_eq!(p.roots.len(), 2);
-
-        for root in p.roots.iter() {
-            crate::ensure_eq!(root.borrow().get_pred().is_none(), true);
-            crate::ensure_eq!(root.borrow().get_succs().is_empty(), true);
+        for root_scope in p.root_scopes.iter() {
+            crate::ensure_eq!(root_scope.get_parent().is_none(), true);
+            crate::ensure_eq!(root_scope.get_children().is_empty(), true);
         }
 
-        crate::ensure_eq!(p.roots[0].borrow().get_name(), "b");
-        crate::ensure_eq!(p.roots[1].borrow().get_name(), "a");
+        crate::ensure_eq!(p.root_scopes[0].get_name(), "b");
+        crate::ensure_eq!(p.root_scopes[1].get_name(), "a");
 
-        crate::ensure_eq!(p.roots[0].borrow().get_num_calls(), 6);
-        crate::ensure_eq!(p.roots[1].borrow().get_num_calls(), 1);
+        crate::ensure_eq!(p.root_scopes[0].get_num_calls(), 6);
+        crate::ensure_eq!(p.root_scopes[1].get_num_calls(), 1);
 
         Ok(())
     })
 }
 
 #[test]
-fn test_succ_reuse() -> Result<()> {
+fn test_child_reuse() -> Result<()> {
     use std::ptr;
 
     profiler::reset();
@@ -55,27 +53,22 @@ fn test_succ_reuse() -> Result<()> {
         }
     }
 
-    crate::ensure_eq!(profiler::PROFILER.with(|p| p.borrow().roots.len()), 1);
+    crate::ensure_eq!(profiler::THREAD_LOCAL_PROFILER.with(|p| p.root_scopes.len()), 1);
 
-    profiler::PROFILER.with(|p| -> Result<()> {
-        let p = p.borrow();
+    profiler::THREAD_LOCAL_PROFILER.with(|p| -> Result<()> {
+        crate::ensure_eq!(p.root_scopes.len(), 1);
 
-        crate::ensure_eq!(p.roots.len(), 1);
-
-        let root = p.roots[0].borrow();
+        let root = &p.root_scopes[0];
         crate::ensure_eq!(root.get_name(), "a");
-        crate::ensure_eq!(root.get_pred().is_none(), true);
-        crate::ensure_eq!(root.get_succs().len(), 1);
+        crate::ensure_eq!(root.get_parent().is_none(), true);
+        crate::ensure_eq!(root.get_children().len(), 1);
         crate::ensure_eq!(root.get_num_calls(), 6);
 
-        let succ = root.get_succs()[0].borrow();
-        crate::ensure_eq!(succ.get_name(), "b");
-        crate::ensure_eq!(
-            ptr::eq(succ.get_pred().as_ref().unwrap().as_ref(), p.roots[0].as_ref()),
-            true
-        );
-        crate::ensure_eq!(succ.get_succs().is_empty(), true);
-        crate::ensure_eq!(succ.get_num_calls(), 3);
+        let child = &root.get_children()[0];
+        crate::ensure_eq!(child.get_name(), "b");
+        crate::ensure_eq!(ptr::eq(child.get_parent().as_ref().unwrap(), &p.root_scopes[0]), true);
+        crate::ensure_eq!(child.get_children().is_empty(), true);
+        crate::ensure_eq!(child.get_num_calls(), 3);
 
         Ok(())
     })
@@ -94,18 +87,18 @@ fn test_reset_during_frame() -> Result<()> {
                 profiler::reset();
             }
 
-            crate::ensure_eq!(profiler::PROFILER.with(|p| p.borrow().current.is_some()), true);
+            crate::ensure_eq!(
+                profiler::THREAD_LOCAL_PROFILER.with(|p| p.current_scope.is_some()),
+                true
+            );
 
             timer!("d");
         }
     }
 
-    profiler::PROFILER.with(|p| -> Result<()> {
-        let p = p.borrow();
-
-        crate::ensure_eq!(p.roots.is_empty(), true);
-        crate::ensure_eq!(p.current.is_none(), true);
-
+    profiler::THREAD_LOCAL_PROFILER.with(|p| -> Result<()> {
+        crate::ensure_eq!(p.root_scopes.is_empty(), true);
+        crate::ensure_eq!(p.current_scope.is_none(), true);
         Ok(())
     })
 }
@@ -118,13 +111,12 @@ impl Future for DummyCoroutine {
     type Output = Result<()>;
 
     fn poll(self: Pin<&mut Self>, _ctx: &mut Context) -> Poll<Self::Output> {
-        match profiler::PROFILER.with(|p| -> Result<()> {
-            let p = p.borrow();
-            crate::ensure_eq!(p.roots.len(), 1);
+        match profiler::THREAD_LOCAL_PROFILER.with(|p| -> Result<()> {
+            crate::ensure_eq!(p.root_scopes.len(), 1);
 
-            let root = p.roots[0].borrow();
-            crate::ensure_eq!(root.get_name(), "dummy");
-            crate::ensure_eq!(root.get_num_calls(), self.as_ref().iterations);
+            let root_scope = &p.root_scopes[0];
+            crate::ensure_eq!(root_scope.get_name(), "dummy");
+            crate::ensure_eq!(root_scope.get_num_calls(), self.as_ref().iterations);
             Ok(())
         }) {
             Ok(()) => {
