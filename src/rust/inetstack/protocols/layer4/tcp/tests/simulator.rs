@@ -10,6 +10,7 @@
 use crate::{
     ensure_eq,
     inetstack::{
+        consts::MAX_HEADER_SIZE,
         protocols::{
             layer2::{EtherType2, Ethernet2Header},
             layer3::{ip::IpProtocol, ipv4::Ipv4Header},
@@ -17,7 +18,6 @@ use crate::{
                 tcp::header::{TcpHeader, TcpOptions2, MAX_TCP_OPTIONS},
                 udp::header::UdpHeader,
             },
-            MAX_HEADER_SIZE,
         },
         test_helpers::{
             self,

@@ -6,8 +6,11 @@
 //======================================================================================================================
 
 use crate::{
-    inetstack::protocols::layer4::tcp::{established::congestion_control, established::Receiver, established::Sender},
-    runtime::network::{config::TcpConfig, socket::option::TcpSocketOptions},
+    inetstack::{
+        config::TcpConfig,
+        protocols::layer4::tcp::{established::congestion_control, established::Receiver, established::Sender},
+    },
+    runtime::network::socket::option::TcpSocketOptions,
 };
 use ::std::net::SocketAddrV4;
 

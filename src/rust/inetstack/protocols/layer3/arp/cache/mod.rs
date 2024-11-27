@@ -8,7 +8,7 @@ mod tests;
 // Imports
 //======================================================================================================================
 
-use crate::{collections::hashttlcache::HashTtlCache, runtime::network::types::MacAddress};
+use crate::{collections::hashttlcache::HashTtlCache, inetstack::types::MacAddress};
 use ::std::{
     collections::HashMap,
     net::Ipv4Addr,

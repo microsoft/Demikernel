@@ -7,7 +7,7 @@
 
 use crate::{
     catnip::runtime::memory::mempool::MemoryPool,
-    inetstack::protocols::MAX_HEADER_SIZE,
+    inetstack::consts::MAX_HEADER_SIZE,
     runtime::{
         fail::Fail,
         libdpdk::{rte_mbuf, rte_mempool},

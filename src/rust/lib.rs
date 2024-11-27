@@ -33,13 +33,13 @@ mod catpowder;
 mod catnap;
 
 pub use self::demikernel::libos::{name::LibOSName, LibOS};
-pub use crate::runtime::{
-    network::{
-        socket::option::SocketOption,
-        types::{MacAddress, Port16},
+pub use crate::{
+    inetstack::types::{MacAddress, Port16},
+    runtime::{
+        network::socket::option::SocketOption,
+        types::{demi_sgarray_t, demi_sgaseg_t},
+        OperationResult, QDesc, QToken, QType,
     },
-    types::{demi_sgarray_t, demi_sgaseg_t},
-    OperationResult, QDesc, QToken, QType,
 };
 
 pub mod demikernel;

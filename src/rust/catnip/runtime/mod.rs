@@ -11,6 +11,7 @@ use self::memory::{consts::DEFAULT_MAX_BODY_SIZE, MemoryManager};
 use crate::{
     demikernel::config::Config,
     expect_some,
+    inetstack::consts::RECEIVE_BATCH_SIZE,
     inetstack::protocols::layer1::PhysicalLayer,
     runtime::{
         fail::Fail,
@@ -27,7 +28,6 @@ use crate::{
             RTE_ETH_LINK_UP, RTE_PKTMBUF_HEADROOM,
         },
         memory::DemiBuffer,
-        network::consts::RECEIVE_BATCH_SIZE,
         SharedObject,
     },
     timer,

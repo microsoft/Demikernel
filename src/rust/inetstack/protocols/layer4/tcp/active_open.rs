@@ -8,24 +8,23 @@
 use crate::{
     collections::{async_queue::SharedAsyncQueue, async_value::SharedAsyncValue},
     expect_some,
-    inetstack::protocols::{
-        layer3::SharedLayer3Endpoint,
-        layer4::tcp::{
-            constants::{FALLBACK_MSS, MAX_WINDOW_SCALE},
-            established::{
-                congestion_control::{self, CongestionControl},
-                SharedEstablishedSocket,
+    inetstack::{
+        config::TcpConfig,
+        consts::{FALLBACK_MSS, MAX_HEADER_SIZE, MAX_WINDOW_SCALE},
+        protocols::{
+            layer3::SharedLayer3Endpoint,
+            layer4::tcp::{
+                established::{
+                    congestion_control::{self, CongestionControl},
+                    SharedEstablishedSocket,
+                },
+                header::{TcpHeader, TcpOptions2},
+                SeqNumber,
             },
-            header::{TcpHeader, TcpOptions2},
-            SeqNumber,
         },
-        MAX_HEADER_SIZE,
     },
     runtime::{
-        fail::Fail,
-        memory::DemiBuffer,
-        network::{config::TcpConfig, socket::option::TcpSocketOptions},
-        SharedDemiRuntime, SharedObject,
+        fail::Fail, memory::DemiBuffer, network::socket::option::TcpSocketOptions, SharedDemiRuntime, SharedObject,
     },
 };
 use ::futures::{select_biased, FutureExt};

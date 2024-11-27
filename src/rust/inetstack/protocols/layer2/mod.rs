@@ -18,11 +18,10 @@ pub use self::ethernet2::{
 use crate::{
     demi_sgarray_t,
     demikernel::config::Config,
-    inetstack::protocols::layer1::PhysicalLayer,
+    inetstack::{consts::RECEIVE_BATCH_SIZE, protocols::layer1::PhysicalLayer, types::MacAddress},
     runtime::{
         fail::Fail,
         memory::{DemiBuffer, MemoryRuntime},
-        network::{consts::RECEIVE_BATCH_SIZE, types::MacAddress},
         SharedObject,
     },
 };

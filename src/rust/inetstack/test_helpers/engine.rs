@@ -4,11 +4,10 @@
 use crate::{
     demi_sgarray_t,
     demikernel::{config::Config, libos::network::libos::SharedNetworkLibOS},
-    inetstack::{test_helpers::SharedTestPhysicalLayer, SharedInetStack},
+    inetstack::{test_helpers::SharedTestPhysicalLayer, types::MacAddress, SharedInetStack},
     runtime::{
         fail::Fail,
         memory::{DemiBuffer, MemoryRuntime},
-        network::types::MacAddress,
         OperationResult, QDesc, QToken, SharedDemiRuntime, SharedObject,
     },
 };
