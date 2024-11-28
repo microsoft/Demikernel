@@ -1,11 +1,19 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+//======================================================================================================================
+// Exports
+//======================================================================================================================
+
 pub mod congestion_control;
 pub mod ctrlblk;
 mod receiver;
 mod rto;
 mod sender;
+
+//======================================================================================================================
+// Imports
+//======================================================================================================================
 
 use crate::{
     async_timer,
@@ -37,6 +45,19 @@ use ::std::{
     time::Instant,
 };
 
+//======================================================================================================================
+// Constants
+//======================================================================================================================
+
+// The max possible window size without scaling is 64KB.
+const MAX_WINDOW_SIZE_WITHOUT_SCALING: u32 = 65535;
+// THe max possible window size with scaling is 1GB.
+const MAX_WINDOW_SIZE_WITH_SCALING: u32 = 1073741824;
+
+//======================================================================================================================
+// Structures
+//======================================================================================================================
+
 pub struct EstablishedSocket {
     // All shared state for this established TCP connection.
     cb: ControlBlock,
@@ -46,6 +67,10 @@ pub struct EstablishedSocket {
 
 #[derive(Clone)]
 pub struct SharedEstablishedSocket(SharedObject<EstablishedSocket>);
+
+//======================================================================================================================
+// Associated Functions
+//======================================================================================================================
 
 impl SharedEstablishedSocket {
     pub fn new(
@@ -58,18 +83,60 @@ impl SharedEstablishedSocket {
         default_socket_options: TcpSocketOptions,
         receiver_seq_no: SeqNumber,
         ack_delay_timeout_secs: Duration,
-        receiver_window_size_frames: u32,
+        receiver_window_size_bytes: u32,
         receiver_window_scale_bits: u8,
         sender_seq_no: SeqNumber,
-        sender_window_size_frames: u32,
+        sender_window_size_bytes: u32,
         sender_window_scale_bits: u8,
         sender_mss: usize,
         cc_constructor: CongestionControlConstructor,
         congestion_control_options: Option<congestion_control::Options>,
     ) -> Result<Self, Fail> {
+        // Check that the send window size is not too large.
+        match sender_window_scale_bits {
+            0 if sender_window_size_bytes > MAX_WINDOW_SIZE_WITHOUT_SCALING => {
+                let cause = "Sender window too large";
+                warn!(
+                    "{}: scale={:?} window={:?}",
+                    cause, sender_window_scale_bits, sender_window_size_bytes
+                );
+                return Err(Fail::new(libc::EINVAL, &cause));
+            },
+            _ if sender_window_size_bytes > MAX_WINDOW_SIZE_WITH_SCALING => {
+                let cause = "Sender window too large";
+                warn!(
+                    "{}: scale={:?} window={:?}",
+                    cause, sender_window_scale_bits, sender_window_size_bytes
+                );
+                return Err(Fail::new(libc::EINVAL, &cause));
+            },
+            _ => (),
+        };
+
+        // Check that the receive window size is not too large.
+        match receiver_window_scale_bits {
+            0 if receiver_window_size_bytes > MAX_WINDOW_SIZE_WITHOUT_SCALING => {
+                let cause = "Receiver window too large";
+                warn!(
+                    "{}: scale={:?} window={:?}",
+                    cause, receiver_window_scale_bits, receiver_window_size_bytes
+                );
+                return Err(Fail::new(libc::EINVAL, &cause));
+            },
+            _ if receiver_window_size_bytes > MAX_WINDOW_SIZE_WITH_SCALING => {
+                let cause = "Receiver window too large";
+                warn!(
+                    "{}: scale={:?} window={:?}",
+                    cause, receiver_window_scale_bits, receiver_window_size_bytes
+                );
+                return Err(Fail::new(libc::EINVAL, &cause));
+            },
+            _ => (),
+        };
+
         let sender: Sender = Sender::new(
             sender_seq_no,
-            sender_window_size_frames,
+            sender_window_size_bytes,
             sender_window_scale_bits,
             sender_mss,
         );
@@ -77,7 +144,7 @@ impl SharedEstablishedSocket {
             receiver_seq_no,
             receiver_seq_no,
             ack_delay_timeout_secs,
-            receiver_window_size_frames,
+            receiver_window_size_bytes,
             receiver_window_scale_bits,
         );
 

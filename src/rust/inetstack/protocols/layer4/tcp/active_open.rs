@@ -139,13 +139,13 @@ impl SharedActiveOpenSocket {
         self.layer3_endpoint
             .transmit_tcp_packet_nonblocking(dst_ipv4_addr, pkt)?;
 
-        let mut remote_window_scale = None;
+        let mut remote_window_scale_bits = None;
         let mut mss = FALLBACK_MSS;
         for option in header.iter_options() {
             match option {
                 TcpOptions2::WindowScale(w) => {
                     info!("Received window scale: {}", w);
-                    remote_window_scale = Some(*w);
+                    remote_window_scale_bits = Some(*w);
                 },
                 TcpOptions2::MaximumSegmentSize(m) => {
                     info!("Received advertised MSS: {}", m);
@@ -155,16 +155,16 @@ impl SharedActiveOpenSocket {
             }
         }
 
-        let (local_window_scale, remote_window_scale): (u8, u8) = match remote_window_scale {
-            Some(remote_window_scale) => {
-                let remote: u8 = if remote_window_scale as usize > MAX_WINDOW_SCALE {
+        let (local_window_scale_bits, remote_window_scale_bits): (u8, u8) = match remote_window_scale_bits {
+            Some(remote_window_scale_bits) => {
+                let remote: u8 = if remote_window_scale_bits as usize > MAX_WINDOW_SCALE {
                     warn!(
                         "remote windows scale larger than {:?} is incorrect, so setting to {:?}. See RFC 1323.",
                         MAX_WINDOW_SCALE, MAX_WINDOW_SCALE
                     );
                     MAX_WINDOW_SCALE as u8
                 } else {
-                    remote_window_scale
+                    remote_window_scale_bits
                 };
                 (self.tcp_config.get_window_scale() as u8, remote)
             },
@@ -173,22 +173,25 @@ impl SharedActiveOpenSocket {
 
         // Expect is safe here because the receive window size is a 16-bit unsigned integer and MAX_WINDOW_SCALE is 14,
         // so it is impossible to overflow the 32-bit unsigned int.
-        debug_assert!((local_window_scale as usize) <= MAX_WINDOW_SCALE);
-        let rx_window_size: u32 = expect_some!(
-            (self.tcp_config.get_receive_window_size() as u32).checked_shl(local_window_scale as u32),
+        debug_assert!((local_window_scale_bits as usize) <= MAX_WINDOW_SCALE);
+        let rx_window_size_bytes: u32 = expect_some!(
+            (self.tcp_config.get_receive_window_size() as u32).checked_shl(local_window_scale_bits as u32),
             "Window size overflow"
         );
         // Expect is safe here because the window size is a 16-bit unsigned integer and MAX_WINDOW_SCALE is 14, so it is impossible to overflow the 32-bit
-        debug_assert!((remote_window_scale as usize) <= MAX_WINDOW_SCALE);
-        let tx_window_size: u32 = expect_some!(
-            (header.window_size as u32).checked_shl(remote_window_scale as u32),
+        debug_assert!((remote_window_scale_bits as usize) <= MAX_WINDOW_SCALE);
+        let tx_window_size_bytes: u32 = expect_some!(
+            (header.window_size as u32).checked_shl(remote_window_scale_bits as u32),
             "Window size overflow"
         );
 
-        info!("Window sizes: local {}, remote {}", rx_window_size, tx_window_size);
+        info!(
+            "Window sizes: local {} bytes, remote {} bytes",
+            rx_window_size_bytes, tx_window_size_bytes
+        );
         info!(
             "Window scale: local {}, remote {}",
-            local_window_scale, remote_window_scale
+            local_window_scale_bits, remote_window_scale_bits
         );
         Ok(SharedEstablishedSocket::new(
             self.local,
@@ -200,11 +203,11 @@ impl SharedActiveOpenSocket {
             self.socket_options,
             remote_seq_num,
             self.tcp_config.get_ack_delay_timeout(),
-            rx_window_size,
-            local_window_scale,
+            rx_window_size_bytes,
+            local_window_scale_bits,
             expected_seq,
-            tx_window_size,
-            remote_window_scale,
+            tx_window_size_bytes,
+            remote_window_scale_bits,
             mss,
             congestion_control::None::new,
             None,

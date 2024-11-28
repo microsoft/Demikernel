@@ -16,7 +16,9 @@ use crate::{
     inetstack::protocols::{
         layer3::SharedLayer3Endpoint,
         layer4::tcp::{
-            established::{ctrlblk::State, ControlBlock, Sender},
+            established::{
+                ctrlblk::State, ControlBlock, Sender, MAX_WINDOW_SIZE_WITHOUT_SCALING, MAX_WINDOW_SIZE_WITH_SCALING,
+            },
             header::TcpHeader,
             SeqNumber,
         },
@@ -73,7 +75,7 @@ pub struct Receiver {
 
     // This is our receive buffer size, which is also the maximum size of our receive window.
     // Note: The maximum possible advertised window is 1 GiB with window scaling and 64 KiB without.
-    buffer_size_frames: u32,
+    buffer_size_bytes: u32,
 
     // This is the number of bits to shift to convert to/from the scaled value, and has a maximum value of 14.
     window_scale_shift_bits: u8,
@@ -93,7 +95,7 @@ impl Receiver {
         reader_next_seq_no: SeqNumber,
         receive_next_seq_no: SeqNumber,
         ack_delay_timeout_secs: Duration,
-        window_size_frames: u32,
+        window_size_bytes: u32,
         window_scale_shift_bits: u8,
     ) -> Self {
         Self {
@@ -103,7 +105,7 @@ impl Receiver {
             pop_queue: AsyncQueue::with_capacity(1024),
             ack_delay_timeout_secs,
             ack_deadline_time_secs: SharedAsyncValue::new(None),
-            buffer_size_frames: window_size_frames,
+            buffer_size_bytes: window_size_bytes,
             window_scale_shift_bits,
             out_of_order_frames: VecDeque::with_capacity(64),
         }
@@ -122,7 +124,12 @@ impl Receiver {
 
     pub fn get_receive_window_size(&self) -> u32 {
         let bytes_unread: u32 = (self.receive_next_seq_no - self.reader_next_seq_no).into();
-        self.buffer_size_frames - bytes_unread
+        // The window should be less than 1GB or 64KB without scaling.
+        debug_assert!(
+            (self.window_scale_shift_bits == 0 && bytes_unread <= MAX_WINDOW_SIZE_WITHOUT_SCALING)
+                || bytes_unread <= MAX_WINDOW_SIZE_WITH_SCALING
+        );
+        self.buffer_size_bytes - bytes_unread
     }
 
     pub fn hdr_window_size(&self) -> u16 {
