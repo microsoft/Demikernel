@@ -51,7 +51,6 @@ thread_local!(
 pub struct Profiler {
     roots: Vec<Rc<RefCell<Scope>>>,
     current: Option<Rc<RefCell<Scope>>>,
-    ns_per_cycle: f64,
     perf_callback: Option<demi_callback_t>,
     #[cfg(feature = "auto-calibrate")]
     clock_drift: u64,
@@ -87,7 +86,6 @@ impl Profiler {
         Profiler {
             roots: Vec::new(),
             current: None,
-            ns_per_cycle: Self::measure_ns_per_cycle(),
             perf_callback: None,
             #[cfg(feature = "auto-calibrate")]
             clock_drift: Self::clock_drift(SAMPLE_SIZE),
@@ -211,14 +209,16 @@ impl Profiler {
     fn write<W: io::Write>(&self, out: &mut W, max_depth: Option<usize>) -> io::Result<()> {
         let total_duration = self.roots.iter().map(|root| root.borrow().get_duration_sum()).sum();
         let thread_id: thread::ThreadId = thread::current().id();
+        let ns_per_cycle: f64 = Self::measure_ns_per_cycle();
 
         writeln!(
             out,
             "call_depth,thread_id,function_name,num_calls,percent_time,cycles_per_call,nanoseconds_per_call"
         )?;
+
         for root in self.roots.iter() {
             root.borrow()
-                .write_recursive(out, thread_id, total_duration, 0, max_depth, self.ns_per_cycle)?;
+                .write_recursive(out, thread_id, total_duration, 0, max_depth, ns_per_cycle)?;
         }
 
         out.flush()
