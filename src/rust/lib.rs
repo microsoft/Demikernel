@@ -216,7 +216,7 @@ macro_rules! async_timer {
     ($name:expr, $future:expr) => {
         async {
             std::pin::pin!($crate::perftools::profiler::AsyncScope::new(
-                $crate::perftools::profiler::PROFILER.with(|p| p.borrow_mut().get_scope($name)),
+                $crate::perftools::profiler::PROFILER.with(|p| p.borrow_mut().get_or_create_scope_index($name)),
                 std::pin::pin!($future).as_mut()
             ))
             .await

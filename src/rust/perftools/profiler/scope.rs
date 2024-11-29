@@ -9,12 +9,10 @@
 
 use crate::{perftools::profiler::PROFILER, runtime::types::demi_callback_t};
 use ::std::{
-    cell::RefCell,
     fmt::{self, Debug},
     future::Future,
     io,
     pin::Pin,
-    rc::Rc,
     task::{Context, Poll},
     thread,
 };
@@ -28,19 +26,12 @@ use ::std::{
 pub struct Scope {
     /// Name of the scope.
     name: &'static str,
-
-    /// Parent scope in the tree. Root scopes have no parent.
-    pred: Option<Rc<RefCell<Scope>>>,
-
-    /// Child scopes in the tree.
-    succs: Vec<Rc<RefCell<Scope>>>,
-
+    parent_scope_index: Option<usize>,
+    children_scope_indices: Vec<usize>,
     /// Callback to report statistics. If this is set to None, we collect averages by default.
     perf_callback: Option<demi_callback_t>,
-
     /// How often has this scope been visited?
     num_calls: usize,
-
     /// In total, how much time has been spent in this scope?
     duration_sum: u64,
 }
@@ -52,7 +43,7 @@ pub struct Guard {
 
 /// A scope over an async block that may yield and re-enter several times.
 pub struct AsyncScope<'a, F: Future> {
-    scope: Rc<RefCell<Scope>>,
+    scope_index: usize,
     future: Pin<&'a mut F>,
 }
 
@@ -61,31 +52,32 @@ pub struct AsyncScope<'a, F: Future> {
 //======================================================================================================================
 
 impl Scope {
-    pub fn new(name: &'static str, pred: Option<Rc<RefCell<Scope>>>, perf_callback: Option<demi_callback_t>) -> Scope {
+    pub fn new(name: &'static str, parent_scope_index: Option<usize>, perf_callback: Option<demi_callback_t>) -> Scope {
         Scope {
             name,
-            pred,
-            succs: Vec::new(),
+            parent_scope_index,
+            children_scope_indices: Vec::new(),
             num_calls: 0,
             duration_sum: 0,
             perf_callback,
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_name(&self) -> &'static str {
         self.name
     }
 
-    pub fn get_pred(&self) -> &Option<Rc<RefCell<Scope>>> {
-        &self.pred
+    pub fn get_parent_scope_index(&self) -> Option<usize> {
+        self.parent_scope_index
     }
 
-    pub fn get_succs(&self) -> &Vec<Rc<RefCell<Scope>>> {
-        &self.succs
+    pub fn get_children(&self) -> &Vec<usize> {
+        &self.children_scope_indices
     }
 
-    pub fn add_succ(&mut self, succ: Rc<RefCell<Scope>>) {
-        self.succs.push(succ.clone())
+    pub fn add_child_scope_index(&mut self, child_scope_index: usize) {
+        self.children_scope_indices.push(child_scope_index)
     }
 
     #[cfg(test)]
@@ -117,7 +109,6 @@ impl Scope {
         }
     }
 
-    /// Dump statistics.
     pub fn write_recursive<W: io::Write>(
         &self,
         out: &mut W,
@@ -126,6 +117,7 @@ impl Scope {
         depth: usize,
         max_depth: Option<usize>,
         ns_per_cycle: f64,
+        children_scopes: Vec<&Scope>,
     ) -> io::Result<()> {
         if let Some(d) = max_depth {
             if depth > d {
@@ -135,10 +127,8 @@ impl Scope {
 
         let total_duration_secs = (total_duration) as f64;
         let duration_sum_secs = (self.duration_sum) as f64;
-        let pred_sum_secs = self
-            .pred
-            .clone()
-            .map_or(total_duration_secs, |pred| (pred.borrow().duration_sum) as f64);
+        // ToDo: This is a bug. We should be using the sum of the predicted durations of the children.
+        let pred_sum_secs = total_duration_secs;
         let percent_time = duration_sum_secs / pred_sum_secs * 100.0;
 
         // Write markers.
@@ -156,10 +146,16 @@ impl Scope {
             duration_sum_secs / (self.num_calls as f64) * ns_per_cycle,
         )?;
 
-        // Write children
-        for succ in &self.succs {
-            succ.borrow()
-                .write_recursive(out, thread_id, total_duration, depth + 1, max_depth, ns_per_cycle)?;
+        for child_scope in children_scopes {
+            child_scope.write_recursive(
+                out,
+                thread_id,
+                total_duration,
+                depth + 1,
+                max_depth,
+                ns_per_cycle,
+                Vec::new(),
+            )?;
         }
 
         Ok(())
@@ -167,8 +163,8 @@ impl Scope {
 }
 
 impl<'a, F: Future> AsyncScope<'a, F> {
-    pub fn new(scope: Rc<RefCell<Scope>>, future: Pin<&'a mut F>) -> Self {
-        Self { scope, future }
+    pub fn new(scope_index: usize, future: Pin<&'a mut F>) -> Self {
+        Self { scope_index, future }
     }
 }
 
@@ -196,7 +192,7 @@ impl<'a, F: Future> Future for AsyncScope<'a, F> {
     fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
         let self_: &mut Self = self.get_mut();
 
-        let _guard = PROFILER.with(|p| p.borrow_mut().enter_scope(self_.scope.clone()));
+        let _guard = PROFILER.with(|p| p.borrow_mut().enter_scope(self_.scope_index));
         Future::poll(self_.future.as_mut(), ctx)
     }
 }

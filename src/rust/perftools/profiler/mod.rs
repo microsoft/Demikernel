@@ -25,10 +25,9 @@ use ::std::{
     cell::RefCell,
     io,
     pin::Pin,
-    rc::Rc,
     time::{Duration, SystemTime},
 };
-use std::thread;
+use std::{collections::HashMap, thread};
 
 //======================================================================================================================
 // Structures
@@ -49,8 +48,12 @@ thread_local!(
 /// [`PROFILER`](constant.PROFILER.html), so it is not possible to manually
 /// create an instance of `Profiler`.
 pub struct Profiler {
-    roots: Vec<Rc<RefCell<Scope>>>,
-    current: Option<Rc<RefCell<Scope>>>,
+    all_scopes: Vec<Scope>,
+    scope_lookup: HashMap<&'static str, usize>,
+    current_scope_index: Option<usize>,
+    root_scopes: Vec<usize>,
+    // roots: Vec<Rc<RefCell<Scope>>>,
+    // current: Option<Rc<RefCell<Scope>>>,
     perf_callback: Option<demi_callback_t>,
     #[cfg(feature = "auto-calibrate")]
     clock_drift: u64,
@@ -84,8 +87,12 @@ pub fn set_callback(perf_callback: demi_callback_t) {
 impl Profiler {
     fn new() -> Profiler {
         Profiler {
-            roots: Vec::new(),
-            current: None,
+            all_scopes: Vec::new(),
+            scope_lookup: HashMap::new(),
+            root_scopes: Vec::new(),
+            current_scope_index: None,
+            // roots: Vec::new(),
+            // current: None,
             perf_callback: None,
             #[cfg(feature = "auto-calibrate")]
             clock_drift: Self::clock_drift(SAMPLE_SIZE),
@@ -105,8 +112,34 @@ impl Profiler {
     /// directly.
     #[inline]
     pub fn sync_scope(&mut self, name: &'static str) -> Guard {
-        let scope = self.get_scope(name);
-        self.enter_scope(scope)
+        let scope_index = self.get_or_create_scope_index(name);
+        self.enter_scope(scope_index)
+    }
+
+    pub fn get_or_create_scope_index(&mut self, name: &'static str) -> usize {
+        match self.scope_lookup.contains_key(name) {
+            true => self.scope_lookup[name],
+            false => {
+                let scope = Scope::new(name, self.current_scope_index, self.perf_callback);
+                self.all_scopes.push(scope);
+                let new_scope_index = self.all_scopes.len() - 1;
+                self.scope_lookup.insert(name, new_scope_index);
+                if self.current_scope_index.is_none() {
+                    self.root_scopes.push(new_scope_index);
+                } else {
+                    self.all_scopes[self.current_scope_index.unwrap()].add_child_scope_index(new_scope_index);
+                }
+                new_scope_index
+            },
+        }
+    }
+
+    pub fn get_or_create_root_scope(&mut self, name: &'static str) -> usize {
+        let scope_index: usize = self.get_or_create_scope_index(name);
+        if !self.root_scopes.contains(&scope_index) {
+            self.root_scopes.push(scope_index);
+        }
+        return scope_index;
     }
 
     /// Create and enter a coroutine scope. These are special async scopes that are always rooted because they do not
@@ -114,68 +147,66 @@ impl Profiler {
     #[inline]
     pub async fn coroutine_scope<F: FusedFuture>(name: &'static str, mut coroutine: Pin<Box<F>>) -> F::Output {
         AsyncScope::new(
-            PROFILER.with(|p| p.borrow_mut().get_root_scope(name)),
+            PROFILER.with(|p| p.borrow_mut().get_or_create_scope_index(name)),
             coroutine.as_mut(),
         )
         .await
     }
 
-    /// Looks up the scope at the root level using the name, creating a new one if not found.
-    fn get_root_scope(&mut self, name: &'static str) -> Rc<RefCell<Scope>> {
-        //Check if `name` already is a root.
-        let existing_root = self.roots.iter().find(|root| root.borrow().get_name() == name).cloned();
+    // /// Looks up the scope at the root level using the name, creating a new one if not found.
+    // fn get_root_scope(&mut self, name: &'static str) -> Rc<RefCell<Scope>> {
+    //     //Check if `name` already is a root.
+    //     let existing_root = self.roots.iter().find(|root| root.borrow().get_name() == name).cloned();
 
-        existing_root.unwrap_or_else(|| {
-            // Add a new root node.
-            let new_scope: Scope = Scope::new(name, None, self.perf_callback);
-            let succ = Rc::new(RefCell::new(new_scope));
+    //     existing_root.unwrap_or_else(|| {
+    //         // Add a new root node.
+    //         let new_scope: Scope = Scope::new(name, None, self.perf_callback);
+    //         let succ = Rc::new(RefCell::new(new_scope));
 
-            self.roots.push(succ.clone());
+    //         self.roots.push(succ.clone());
 
-            succ
-        })
-    }
+    //         succ
+    //     })
+    // }
 
-    /// Look up the scope using the name.
-    pub fn get_scope(&mut self, name: &'static str) -> Rc<RefCell<Scope>> {
-        // Check if we have already registered `name` at the current point in
-        // the tree.
-        if let Some(current) = self.current.as_ref() {
-            // We are currently in some scope.
-            let existing_succ = current
-                .borrow()
-                .get_succs()
-                .iter()
-                .find(|succ| succ.borrow().get_name() == name)
-                .cloned();
+    // /// Look up the scope using the name.
+    // pub fn get_scope(&mut self, name: &'static str) -> Rc<RefCell<Scope>> {
+    //     // Check if we have already registered `name` at the current point in
+    //     // the tree.
+    //     if let Some(current) = self.current.as_ref() {
+    //         // We are currently in some scope.
+    //         let existing_succ = current
+    //             .borrow()
+    //             .get_succs()
+    //             .iter()
+    //             .find(|succ| succ.borrow().get_name() == name)
+    //             .cloned();
 
-            existing_succ.unwrap_or_else(|| {
-                // Add new successor node to the current node.
-                let new_scope: Scope = Scope::new(name, Some(current.clone()), self.perf_callback);
-                let succ = Rc::new(RefCell::new(new_scope));
+    //         existing_succ.unwrap_or_else(|| {
+    //             // Add new successor node to the current node.
+    //             let new_scope: Scope = Scope::new(name, Some(current.clone()), self.perf_callback);
+    //             let succ = Rc::new(RefCell::new(new_scope));
 
-                current.borrow_mut().add_succ(succ.clone());
+    //             current.borrow_mut().add_succ(succ.clone());
 
-                succ
-            })
-        } else {
-            // We are currently not within any scope.
-            self.get_root_scope(name)
-        }
-    }
+    //             succ
+    //         })
+    //     } else {
+    //         // We are currently not within any scope.
+    //         self.get_root_scope(name)
+    //     }
+    // }
 
     /// Actually enter a scope.
-    fn enter_scope(&mut self, scope: Rc<RefCell<Scope>>) -> Guard {
-        trace!("Entering scope: {}", scope.borrow().get_name());
-        let guard = scope.borrow_mut().enter();
-        self.current = Some(scope);
+    fn enter_scope(&mut self, scope_index: usize) -> Guard {
+        let guard = self.all_scopes[scope_index].enter();
+        self.current_scope_index = Some(scope_index);
 
         guard
     }
 
-    /// Completely reset profiling data.
     fn reset(&mut self) {
-        self.roots.clear();
+        self.root_scopes.clear();
 
         // Note that we could now still be anywhere in the previous profiling
         // tree, so we can not simply reset `self.current`. However, as the
@@ -186,28 +217,48 @@ impl Profiler {
     /// Leave the current scope.
     #[inline]
     fn leave_scope(&mut self, duration: u64) {
-        self.current = if let Some(current) = self.current.as_ref() {
+        self.current_scope_index = if let Some(current_scope_index) = self.current_scope_index {
             cfg_if::cfg_if! {
                 if #[cfg(feature = "auto-calibrate")] {
                     let d = duration.checked_sub(self.clock_drift);
-                    current.borrow_mut().leave(d.unwrap_or(duration));
+                    self.all_scopes[current_scope_index].leave(d.unwrap_or(duration));
                 } else {
-                    current.borrow_mut().leave(duration);
+                    self.all_scopes[current_scope_index].leave(duration);
                 }
             }
-
-            // Set current scope back to the parent node (if any).
-            current.borrow().get_pred().as_ref().cloned()
+            self.all_scopes[current_scope_index].get_parent_scope_index()
         } else {
-            // This should not happen with proper usage.
             log::error!("Called perftools::profiler::leave() while not in any scope");
-
             None
         };
+
+        // self.current = if let Some(current) = self.current.as_ref() {
+        //     cfg_if::cfg_if! {
+        //         if #[cfg(feature = "auto-calibrate")] {
+        //             let d = duration.checked_sub(self.clock_drift);
+        //             current.borrow_mut().leave(d.unwrap_or(duration));
+        //         } else {
+        //             current.borrow_mut().leave(duration);
+        //         }
+        //     }
+
+        //     // Set current scope back to the parent node (if any).
+        //     current.borrow().get_pred().as_ref().cloned()
+        // } else {
+        //     // This should not happen with proper usage.
+        //     log::error!("Called perftools::profiler::leave() while not in any scope");
+
+        //     None
+        // };
     }
 
     fn write<W: io::Write>(&self, out: &mut W, max_depth: Option<usize>) -> io::Result<()> {
-        let total_duration = self.roots.iter().map(|root| root.borrow().get_duration_sum()).sum();
+        // let total_duration = self.roots.iter().map(|root| root.borrow().get_duration_sum()).sum();
+        let total_duration = self
+            .root_scopes
+            .iter()
+            .map(|root_index| self.all_scopes[*root_index].get_duration_sum())
+            .sum();
         let thread_id: thread::ThreadId = thread::current().id();
         let ns_per_cycle: f64 = Self::measure_ns_per_cycle();
 
@@ -216,9 +267,23 @@ impl Profiler {
             "call_depth,thread_id,function_name,num_calls,percent_time,cycles_per_call,nanoseconds_per_call"
         )?;
 
-        for root in self.roots.iter() {
-            root.borrow()
-                .write_recursive(out, thread_id, total_duration, 0, max_depth, ns_per_cycle)?;
+        for root_index in self.root_scopes.iter() {
+            let root = &self.all_scopes[*root_index];
+            // get vec of children for root
+            let children_indices: &Vec<usize> = root.get_children();
+            let mut children_scopes: Vec<&Scope> = Vec::new();
+            for child_index in children_indices.iter() {
+                children_scopes.push(&self.all_scopes[*child_index]);
+            }
+            root.write_recursive(
+                out,
+                thread_id,
+                total_duration,
+                0,
+                max_depth,
+                ns_per_cycle,
+                children_scopes,
+            )?;
         }
 
         out.flush()

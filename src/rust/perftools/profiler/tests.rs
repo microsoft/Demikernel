@@ -1,7 +1,11 @@
 // Copyright(c) Microsoft Corporation.
 // Licensed under the MIT license.
 
-use crate::{async_timer, perftools::profiler, timer};
+use crate::{
+    async_timer,
+    perftools::profiler::{self, scope::Scope},
+    timer,
+};
 use ::anyhow::Result;
 use ::std::{
     future::Future,
@@ -25,27 +29,39 @@ fn test_multiple_roots() -> Result<()> {
     profiler::PROFILER.with(|p| -> Result<()> {
         let p = p.borrow();
 
-        crate::ensure_eq!(p.roots.len(), 2);
+        // crate::ensure_eq!(p.roots.len(), 2);
 
-        for root in p.roots.iter() {
-            crate::ensure_eq!(root.borrow().get_pred().is_none(), true);
-            crate::ensure_eq!(root.borrow().get_succs().is_empty(), true);
+        // for root in p.roots.iter() {
+        //     crate::ensure_eq!(root.borrow().get_pred().is_none(), true);
+        //     crate::ensure_eq!(root.borrow().get_succs().is_empty(), true);
+        // }
+
+        // crate::ensure_eq!(p.roots[0].borrow().get_name(), "b");
+        // crate::ensure_eq!(p.roots[1].borrow().get_name(), "a");
+
+        // crate::ensure_eq!(p.roots[0].borrow().get_num_calls(), 6);
+        // crate::ensure_eq!(p.roots[1].borrow().get_num_calls(), 1);
+
+        crate::ensure_eq!(p.root_scopes.len(), 2);
+
+        for root_scope_index in p.root_scopes.iter() {
+            let root_scope: &Scope = &p.all_scopes[*root_scope_index];
+            crate::ensure_eq!(root_scope.get_parent_scope_index().is_none(), true);
+            crate::ensure_eq!(root_scope.get_children().is_empty(), true);
         }
 
-        crate::ensure_eq!(p.roots[0].borrow().get_name(), "b");
-        crate::ensure_eq!(p.roots[1].borrow().get_name(), "a");
+        crate::ensure_eq!(p.all_scopes[p.root_scopes[0]].get_name(), "b");
+        crate::ensure_eq!(p.all_scopes[p.root_scopes[1]].get_name(), "a");
 
-        crate::ensure_eq!(p.roots[0].borrow().get_num_calls(), 6);
-        crate::ensure_eq!(p.roots[1].borrow().get_num_calls(), 1);
+        crate::ensure_eq!(p.all_scopes[p.root_scopes[0]].get_num_calls(), 6);
+        crate::ensure_eq!(p.all_scopes[p.root_scopes[1]].get_num_calls(), 1);
 
         Ok(())
     })
 }
 
 #[test]
-fn test_succ_reuse() -> Result<()> {
-    use std::ptr;
-
+fn test_child_reuse() -> Result<()> {
     profiler::reset();
 
     for i in 0..=5 {
@@ -55,27 +71,27 @@ fn test_succ_reuse() -> Result<()> {
         }
     }
 
-    crate::ensure_eq!(profiler::PROFILER.with(|p| p.borrow().roots.len()), 1);
+    crate::ensure_eq!(profiler::PROFILER.with(|p| p.borrow().root_scopes.len()), 1);
 
     profiler::PROFILER.with(|p| -> Result<()> {
         let p = p.borrow();
 
-        crate::ensure_eq!(p.roots.len(), 1);
+        crate::ensure_eq!(p.root_scopes.len(), 1);
 
-        let root = p.roots[0].borrow();
-        crate::ensure_eq!(root.get_name(), "a");
-        crate::ensure_eq!(root.get_pred().is_none(), true);
-        crate::ensure_eq!(root.get_succs().len(), 1);
-        crate::ensure_eq!(root.get_num_calls(), 6);
+        let root_scope: &Scope = &p.all_scopes[p.root_scopes[0]];
+        crate::ensure_eq!(root_scope.get_name(), "a");
+        crate::ensure_eq!(root_scope.get_parent_scope_index().is_none(), true);
+        crate::ensure_eq!(root_scope.get_children().len(), 1);
+        crate::ensure_eq!(root_scope.get_num_calls(), 6);
 
-        let succ = root.get_succs()[0].borrow();
-        crate::ensure_eq!(succ.get_name(), "b");
+        let child: &Scope = &p.all_scopes[root_scope.get_children()[0]];
+        crate::ensure_eq!(child.get_name(), "b");
         crate::ensure_eq!(
-            ptr::eq(succ.get_pred().as_ref().unwrap().as_ref(), p.roots[0].as_ref()),
-            true
+            p.all_scopes[child.get_parent_scope_index().unwrap()].get_name(),
+            p.all_scopes[p.root_scopes[0]].get_name()
         );
-        crate::ensure_eq!(succ.get_succs().is_empty(), true);
-        crate::ensure_eq!(succ.get_num_calls(), 3);
+        crate::ensure_eq!(child.get_children().is_empty(), true);
+        crate::ensure_eq!(child.get_num_calls(), 3);
 
         Ok(())
     })
@@ -94,7 +110,10 @@ fn test_reset_during_frame() -> Result<()> {
                 profiler::reset();
             }
 
-            crate::ensure_eq!(profiler::PROFILER.with(|p| p.borrow().current.is_some()), true);
+            crate::ensure_eq!(
+                profiler::PROFILER.with(|p| p.borrow().current_scope_index.is_some()),
+                true
+            );
 
             timer!("d");
         }
@@ -103,8 +122,8 @@ fn test_reset_during_frame() -> Result<()> {
     profiler::PROFILER.with(|p| -> Result<()> {
         let p = p.borrow();
 
-        crate::ensure_eq!(p.roots.is_empty(), true);
-        crate::ensure_eq!(p.current.is_none(), true);
+        crate::ensure_eq!(p.root_scopes.is_empty(), true);
+        crate::ensure_eq!(p.current_scope_index.is_none(), true);
 
         Ok(())
     })
@@ -120,11 +139,11 @@ impl Future for DummyCoroutine {
     fn poll(self: Pin<&mut Self>, _ctx: &mut Context) -> Poll<Self::Output> {
         match profiler::PROFILER.with(|p| -> Result<()> {
             let p = p.borrow();
-            crate::ensure_eq!(p.roots.len(), 1);
+            crate::ensure_eq!(p.root_scopes.len(), 1);
 
-            let root = p.roots[0].borrow();
-            crate::ensure_eq!(root.get_name(), "dummy");
-            crate::ensure_eq!(root.get_num_calls(), self.as_ref().iterations);
+            let root_scope: &Scope = &p.all_scopes[p.root_scopes[0]];
+            crate::ensure_eq!(root_scope.get_name(), "dummy");
+            crate::ensure_eq!(root_scope.get_num_calls(), self.as_ref().iterations);
             Ok(())
         }) {
             Ok(()) => {
