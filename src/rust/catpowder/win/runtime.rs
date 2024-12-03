@@ -63,7 +63,6 @@ impl SharedCatpowderRuntime {
     /// Instantiates a new XDP runtime.
     pub fn new(config: &Config) -> Result<Self, Fail> {
         let ifindex: u32 = config.local_interface_index()?;
-        let vf_if_index = config.local_vf_interface_index(); // N.B. this one is optional
 
         trace!("Creating XDP runtime.");
         let mut api: XdpApi = XdpApi::new()?;
@@ -71,19 +70,43 @@ impl SharedCatpowderRuntime {
         // Open TX and RX rings
         let tx: TxRing = TxRing::new(&mut api, Self::RING_LENGTH, ifindex, 0)?;
 
+        let cohost_mode = config.xdp_cohost_mode()?;
+        let (tcp_ports, udp_ports) = if cohost_mode {
+            trace!("XDP cohost mode enabled.");
+            config.xdp_cohost_ports()?
+        } else {
+            trace!("XDP not cohosted; will redirect all traffic");
+            (vec![], vec![])
+        };
+
+        let make_ring = |api: &mut XdpApi, length: u32, ifindex: u32, queueid: u32| -> Result<RxRing, Fail> {
+            if cohost_mode {
+                RxRing::new_cohost(
+                    api,
+                    length,
+                    ifindex,
+                    queueid,
+                    tcp_ports.as_slice(),
+                    udp_ports.as_slice(),
+                )
+            } else {
+                RxRing::new_redirect_all(api, length, ifindex, queueid)
+            }
+        };
+
         let queue_count: u32 = deduce_rss_settings(&mut api, ifindex)?;
         let mut rx_rings: Vec<RxRing> = Vec::with_capacity(queue_count as usize);
         for queueid in 0..queue_count {
-            rx_rings.push(RxRing::new(&mut api, Self::RING_LENGTH, ifindex, queueid as u32)?);
+            rx_rings.push(make_ring(&mut api, Self::RING_LENGTH, ifindex, queueid as u32)?);
         }
         trace!("Created {} RX rings on interface {}", rx_rings.len(), ifindex);
 
-        if let Ok(vf_if_index) = vf_if_index {
+        let vf_rx_rings: Vec<RxRing> = if let Ok(vf_if_index) = config.local_vf_interface_index() {
             // Optionally create VF RX rings
-            let vf_queue_count = deduce_rss_settings(&mut api, vf_if_index)?;
-            let mut vf_rx_rings = Vec::with_capacity(vf_queue_count as usize);
+            let vf_queue_count: u32 = deduce_rss_settings(&mut api, vf_if_index)?;
+            let mut vf_rx_rings: Vec<RxRing> = Vec::with_capacity(vf_queue_count as usize);
             for queueid in 0..vf_queue_count {
-                vf_rx_rings.push(RxRing::new(&mut api, Self::RING_LENGTH, vf_if_index, queueid as u32)?);
+                vf_rx_rings.push(make_ring(&mut api, Self::RING_LENGTH, vf_if_index, queueid as u32)?);
             }
             trace!(
                 "Created {} RX rings on VF interface {}.",
@@ -91,20 +114,17 @@ impl SharedCatpowderRuntime {
                 vf_if_index
             );
 
-            Ok(Self(SharedObject::new(CatpowderRuntimeInner {
-                api,
-                tx,
-                rx_rings,
-                vf_rx_rings,
-            })))
+            vf_rx_rings
         } else {
-            Ok(Self(SharedObject::new(CatpowderRuntimeInner {
-                api,
-                tx,
-                rx_rings,
-                vf_rx_rings: Vec::new(),
-            })))
-        }
+            vec![]
+        };
+
+        Ok(Self(SharedObject::new(CatpowderRuntimeInner {
+            api,
+            tx,
+            rx_rings,
+            vf_rx_rings,
+        })))
     }
 }
 

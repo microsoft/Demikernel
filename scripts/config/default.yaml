@@ -7,6 +7,10 @@ demikernel:
 raw_socket:
   linux_interface_name: "abcde"
   xdp_interface_index: 0
+  xdp_cohost_mode: false
+  # Enable the following for XDP cohosting mode, or override in environment:
+  # xdp_tcp_ports: [80, 443]
+  # xdp_udp_ports: [53]
   # Enable the following line if you have a VF interface
   # xdp_vf_interface_index: 0
 dpdk:

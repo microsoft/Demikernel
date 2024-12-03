@@ -16,6 +16,7 @@ use crate::{
         },
         socket::XdpSocket,
     },
+    inetstack::protocols::Protocol,
     runtime::{fail::Fail, libxdp, limits},
 };
 use ::std::{cell::RefCell, rc::Rc};
@@ -26,6 +27,10 @@ use ::std::{cell::RefCell, rc::Rc};
 
 /// A ring for receiving packets.
 pub struct RxRing {
+    /// Index of the interface for the ring.
+    ifindex: u32,
+    /// Index of the queue for the ring.
+    queueid: u32,
     /// A user memory region where receive buffers are stored.
     mem: Rc<RefCell<UmemReg>>,
     /// A ring for receiving packets.
@@ -33,9 +38,9 @@ pub struct RxRing {
     /// A ring for returning receive buffers to the kernel.
     rx_fill_ring: XdpRing,
     /// Underlying XDP socket.
-    _socket: XdpSocket, // NOTE: we keep this here to prevent the socket from being dropped.
+    socket: XdpSocket, // NOTE: we keep this here to prevent the socket from being dropped.
     /// Underlying XDP program.
-    _program: XdpProgram, // NOTE: we keep this here to prevent the program from being dropped.
+    _program: Option<XdpProgram>, // NOTE: we keep this here to prevent the program from being dropped.
 }
 
 //======================================================================================================================
@@ -44,7 +49,7 @@ pub struct RxRing {
 
 impl RxRing {
     /// Creates a new ring for receiving packets.
-    pub fn new(api: &mut XdpApi, length: u32, ifindex: u32, queueid: u32) -> Result<Self, Fail> {
+    fn new(api: &mut XdpApi, length: u32, ifindex: u32, queueid: u32) -> Result<Self, Fail> {
         // Create an XDP socket.
         trace!("creating xdp socket");
         let mut socket: XdpSocket = XdpSocket::create(api)?;
@@ -63,7 +68,7 @@ impl RxRing {
         )?;
 
         // Set rx ring size.
-        trace!("setting rx ring size");
+        trace!("setting rx ring size: {}", length);
         socket.setsockopt(
             api,
             libxdp::XSK_SOCKOPT_RX_RING_SIZE,
@@ -72,7 +77,7 @@ impl RxRing {
         )?;
 
         // Set rx fill ring size.
-        trace!("setting rx fill ring size");
+        trace!("setting rx fill ring size: {}", length);
         socket.setsockopt(
             api,
             libxdp::XSK_SOCKOPT_RX_FILL_RING_SIZE,
@@ -81,7 +86,7 @@ impl RxRing {
         )?;
 
         // Bind the rx queue.
-        trace!("binding rx queue");
+        trace!("binding rx queue for interface {}, queue {}", ifindex, queueid);
         socket.bind(api, ifindex, queueid, libxdp::_XSK_BIND_FLAGS_XSK_BIND_FLAG_RX)?;
 
         // Activate socket to enable packet reception.
@@ -111,25 +116,67 @@ impl RxRing {
         unsafe { *b = 0 };
         rx_fill_ring.producer_submit(length);
 
-        // Create XDP program.
-        trace!("creating xdp program");
+        Ok(Self {
+            ifindex,
+            queueid,
+            mem,
+            rx_ring,
+            rx_fill_ring,
+            socket: socket,
+            _program: None,
+        })
+    }
+
+    /// Create a new RxRing which redirects all traffic on the (if, queue) pair.
+    pub fn new_redirect_all(api: &mut XdpApi, length: u32, ifindex: u32, queueid: u32) -> Result<Self, Fail> {
+        let mut ring: Self = Self::new(api, length, ifindex, queueid)?;
+        let rules: [XdpRule; 1] = [XdpRule::new(&ring.socket)];
+        ring.reprogram(api, &rules)?;
+        Ok(ring)
+    }
+
+    /// Create a new RxRing which redirects only specific TCP/UDP ports on the (if, queue) pair.
+    pub fn new_cohost(
+        api: &mut XdpApi,
+        length: u32,
+        ifindex: u32,
+        queueid: u32,
+        tcp_ports: &[u16],
+        udp_ports: &[u16],
+    ) -> Result<Self, Fail> {
+        let mut ring: Self = Self::new(api, length, ifindex, queueid)?;
+
+        let rules: Vec<XdpRule> = tcp_ports
+            .iter()
+            .map(|port: &u16| XdpRule::new_for_dest(&ring.socket, Protocol::Tcp, *port))
+            .chain(
+                udp_ports
+                    .iter()
+                    .map(|port: &u16| XdpRule::new_for_dest(&ring.socket, Protocol::Udp, *port)),
+            )
+            .collect::<Vec<XdpRule>>();
+
+        ring.reprogram(api, rules.as_slice())?;
+        Ok(ring)
+    }
+
+    /// Update the RxRing to use the specified rules for filtering.
+    fn reprogram(&mut self, api: &mut XdpApi, rules: &[XdpRule]) -> Result<(), Fail> {
         const XDP_INSPECT_RX: libxdp::XDP_HOOK_ID = libxdp::XDP_HOOK_ID {
             Layer: libxdp::_XDP_HOOK_LAYER_XDP_HOOK_L2,
             Direction: libxdp::_XDP_HOOK_DATAPATH_DIRECTION_XDP_HOOK_RX,
             SubLayer: libxdp::_XDP_HOOK_SUBLAYER_XDP_HOOK_INSPECT,
         };
-        let rules: Vec<XdpRule> = vec![XdpRule::new(&socket)];
-        let program: XdpProgram = XdpProgram::new(api, &rules, ifindex, &XDP_INSPECT_RX, queueid, 0)?;
 
-        trace!("xdp program created");
+        let program: XdpProgram = XdpProgram::new(api, &rules, self.ifindex, &XDP_INSPECT_RX, self.queueid, 0)?;
+        trace!(
+            "xdp program created for interface {}, queue {}",
+            self.ifindex,
+            self.queueid
+        );
 
-        Ok(Self {
-            mem,
-            rx_ring,
-            rx_fill_ring,
-            _socket: socket,
-            _program: program,
-        })
+        self._program = Some(program);
+        Ok(())
     }
 
     /// Reserves a consumer slot in the rx ring.
