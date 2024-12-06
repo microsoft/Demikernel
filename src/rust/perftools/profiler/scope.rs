@@ -26,23 +26,14 @@ use ::std::{
 /// Internal representation of scopes as a tree. This tracks a single profiling block of code in relationship to other
 /// profiled blocks.
 pub struct Scope {
-    /// Name of the scope.
-    name: &'static str,
-
-    /// Parent scope in the tree. Root scopes have no parent.
-    pred: Option<Rc<RefCell<Scope>>>,
-
-    /// Child scopes in the tree.
-    succs: Vec<Rc<RefCell<Scope>>>,
-
+    pub name: &'static str,
+    pub parent_scope: Option<Rc<RefCell<Scope>>>,
+    pub children_scopes: Vec<Rc<RefCell<Scope>>>,
     /// Callback to report statistics. If this is set to None, we collect averages by default.
-    perf_callback: Option<demi_callback_t>,
-
-    /// How often has this scope been visited?
-    num_calls: usize,
-
+    pub perf_callback: Option<demi_callback_t>,
+    pub num_calls: usize,
     /// In total, how much time has been spent in this scope?
-    duration_sum: u64,
+    pub duration_sum: u64,
 }
 
 /// A guard that is created when entering a scope and dropped when leaving it.
@@ -61,31 +52,23 @@ pub struct AsyncScope<'a, F: Future> {
 //======================================================================================================================
 
 impl Scope {
-    pub fn new(name: &'static str, pred: Option<Rc<RefCell<Scope>>>, perf_callback: Option<demi_callback_t>) -> Scope {
+    pub fn new(
+        name: &'static str,
+        parent_scope: Option<Rc<RefCell<Scope>>>,
+        perf_callback: Option<demi_callback_t>,
+    ) -> Scope {
         Scope {
             name,
-            pred,
-            succs: Vec::new(),
+            parent_scope,
+            children_scopes: Vec::new(),
             num_calls: 0,
             duration_sum: 0,
             perf_callback,
         }
     }
 
-    pub fn get_name(&self) -> &'static str {
-        self.name
-    }
-
-    pub fn get_pred(&self) -> &Option<Rc<RefCell<Scope>>> {
-        &self.pred
-    }
-
-    pub fn get_succs(&self) -> &Vec<Rc<RefCell<Scope>>> {
-        &self.succs
-    }
-
-    pub fn add_succ(&mut self, succ: Rc<RefCell<Scope>>) {
-        self.succs.push(succ.clone())
+    pub fn add_child_scope(&mut self, child_scope: Rc<RefCell<Scope>>) {
+        self.children_scopes.push(child_scope.clone())
     }
 
     #[cfg(test)]
@@ -93,12 +76,7 @@ impl Scope {
         self.num_calls
     }
 
-    pub fn get_duration_sum(&self) -> u64 {
-        self.duration_sum
-    }
-
-    /// Enter this scope. Returns a `Guard` instance that should be dropped
-    /// when leaving the scope.
+    /// Enter this scope. Returns a `Guard` instance that should be dropped when leaving the scope.
     #[inline]
     pub fn enter(&mut self) -> Guard {
         Guard::enter()
@@ -107,32 +85,32 @@ impl Scope {
     /// Leave this scope. Called automatically by the `Guard` instance.
     #[inline]
     pub fn leave(&mut self, duration: u64) {
-        if let Some(callback) = self.perf_callback {
-            callback(self.name.as_ptr() as *const i8, self.name.len() as u32, duration);
+        if let Some(callback_fn) = self.perf_callback {
+            callback_fn(self.name.as_ptr() as *const i8, self.name.len() as u32, duration);
         } else {
             self.num_calls += 1;
-
             // Even though this is extremely unlikely, let's not panic on overflow.
             self.duration_sum = self.duration_sum + duration;
         }
     }
 
-    /// Dump statistics.
     pub fn write_recursive<W: io::Write>(
         &self,
         out: &mut W,
         thread_id: thread::ThreadId,
-        total_duration: u64,
+        grand_total_duration: u64,
         depth: usize,
         ns_per_cycle: f64,
     ) -> io::Result<()> {
-        let total_duration_secs = (total_duration) as f64;
-        let duration_sum_secs = (self.duration_sum) as f64;
-        let pred_sum_secs = self
-            .pred
+        let duration_sum: f64 = (self.duration_sum) as f64;
+        // Use the grand total duration if this is a root scope.
+        let parent_duration_sum: f64 = self
+            .parent_scope
             .clone()
-            .map_or(total_duration_secs, |pred| (pred.borrow().duration_sum) as f64);
-        let percent_time = duration_sum_secs / pred_sum_secs * 100.0;
+            .map_or((grand_total_duration) as f64, |parent_scope| {
+                (parent_scope.borrow().duration_sum) as f64
+            });
+        let percent_time = duration_sum / parent_duration_sum * 100.0;
 
         // Write markers.
         let mut markers = String::from("+");
@@ -145,14 +123,14 @@ impl Scope {
             format!("{},{:?},{}", markers, thread_id, self.name),
             self.num_calls,
             percent_time,
-            duration_sum_secs / (self.num_calls as f64),
-            duration_sum_secs / (self.num_calls as f64) * ns_per_cycle,
+            duration_sum / (self.num_calls as f64),
+            duration_sum / (self.num_calls as f64) * ns_per_cycle,
         )?;
 
         // Write children
-        for succ in &self.succs {
+        for succ in &self.children_scopes {
             succ.borrow()
-                .write_recursive(out, thread_id, total_duration, depth + 1, ns_per_cycle)?;
+                .write_recursive(out, thread_id, grand_total_duration, depth + 1, ns_per_cycle)?;
         }
 
         Ok(())
