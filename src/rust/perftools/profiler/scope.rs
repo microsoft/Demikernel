@@ -124,15 +124,8 @@ impl Scope {
         thread_id: thread::ThreadId,
         total_duration: u64,
         depth: usize,
-        max_depth: Option<usize>,
         ns_per_cycle: f64,
     ) -> io::Result<()> {
-        if let Some(d) = max_depth {
-            if depth > d {
-                return Ok(());
-            }
-        }
-
         let total_duration_secs = (total_duration) as f64;
         let duration_sum_secs = (self.duration_sum) as f64;
         let pred_sum_secs = self
@@ -159,7 +152,7 @@ impl Scope {
         // Write children
         for succ in &self.succs {
             succ.borrow()
-                .write_recursive(out, thread_id, total_duration, depth + 1, max_depth, ns_per_cycle)?;
+                .write_recursive(out, thread_id, total_duration, depth + 1, ns_per_cycle)?;
         }
 
         Ok(())

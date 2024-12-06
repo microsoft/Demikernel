@@ -68,8 +68,8 @@ pub struct Profiler {
 /// root nodes. Thus, if you have multiple root nodes and they do not cover
 /// all code that runs in your program, the printed frequencies will be
 /// overestimated.
-pub fn write<W: io::Write>(out: &mut W, max_depth: Option<usize>) -> io::Result<()> {
-    PROFILER.with(|p| p.borrow().write(out, max_depth))
+pub fn write<W: io::Write>(out: &mut W) -> io::Result<()> {
+    PROFILER.with(|p| p.borrow().write(out))
 }
 
 /// Reset profiling information.
@@ -206,7 +206,7 @@ impl Profiler {
         };
     }
 
-    fn write<W: io::Write>(&self, out: &mut W, max_depth: Option<usize>) -> io::Result<()> {
+    fn write<W: io::Write>(&self, out: &mut W) -> io::Result<()> {
         let total_duration = self.roots.iter().map(|root| root.borrow().get_duration_sum()).sum();
         let thread_id: thread::ThreadId = thread::current().id();
         let ns_per_cycle: f64 = Self::measure_ns_per_cycle();
@@ -217,7 +217,7 @@ impl Profiler {
         )?;
         for root in self.roots.iter() {
             root.borrow()
-                .write_recursive(out, thread_id, total_duration, 0, max_depth, ns_per_cycle)?;
+                .write_recursive(out, thread_id, total_duration, 0, ns_per_cycle)?;
         }
 
         out.flush()
@@ -257,7 +257,6 @@ impl Profiler {
 
 impl Drop for Profiler {
     fn drop(&mut self) {
-        self.write(&mut std::io::stdout(), None)
-            .expect("failed to write to stdout");
+        self.write(&mut std::io::stdout()).expect("failed to write to stdout");
     }
 }
