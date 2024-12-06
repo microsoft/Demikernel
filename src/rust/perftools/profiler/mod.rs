@@ -34,9 +34,6 @@ use std::thread;
 // Structures
 //======================================================================================================================
 
-#[cfg(feature = "auto-calibrate")]
-const SAMPLE_SIZE: usize = 16641;
-
 thread_local!(
     pub static PROFILER: RefCell<Profiler> = RefCell::new(Profiler::new())
 );
@@ -48,8 +45,6 @@ pub struct Profiler {
     root_scopes: Vec<Rc<RefCell<Scope>>>,
     current: Option<Rc<RefCell<Scope>>>,
     perf_callback: Option<demi_callback_t>,
-    #[cfg(feature = "auto-calibrate")]
-    clock_drift: u64,
 }
 
 //======================================================================================================================
@@ -77,8 +72,6 @@ impl Profiler {
             root_scopes: Vec::new(),
             current: None,
             perf_callback: None,
-            #[cfg(feature = "auto-calibrate")]
-            clock_drift: Self::clock_drift(SAMPLE_SIZE),
         }
     }
 
@@ -161,19 +154,10 @@ impl Profiler {
         // point `self.current` will be set to `None`.
     }
 
-    /// Leave the current scope.
     #[inline]
     fn leave_scope(&mut self, duration: u64) {
         self.current = if let Some(current) = self.current.as_ref() {
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "auto-calibrate")] {
-                    let d = duration.checked_sub(self.clock_drift);
-                    current.borrow_mut().leave(d.unwrap_or(duration));
-                } else {
-                    current.borrow_mut().leave(duration);
-                }
-            }
-
+            current.borrow_mut().leave(duration);
             current.borrow().parent_scope.as_ref().cloned()
         } else {
             // This should not happen with proper usage.
@@ -229,20 +213,6 @@ impl Profiler {
         let in_ns: u64 = since_the_epoch.as_secs() * 1_000_000_000 + since_the_epoch.subsec_nanos() as u64;
 
         in_ns as f64 / (end_cycle - start_cycle) as f64
-    }
-
-    #[cfg(feature = "auto-calibrate")]
-    fn clock_drift(nsamples: usize) -> u64 {
-        let mut total = 0;
-
-        for _ in 0..nsamples {
-            let now: u64 = x86::time::rdtscp();
-            let duration: u64 = x86::time::rdtscp() - now;
-
-            let d = total + duration;
-        }
-
-        total / (nsamples as u64)
     }
 }
 
