@@ -247,7 +247,7 @@ def main():
 
     # Initialize glboal variables.
     if skip_git:
-        print("Skipping git operations")
+        print("--skip_git is set to True, skipping git operations")
     else:
         head_commit: str = git.get_head_commit(branch)
         set_commit_hash(head_commit)
