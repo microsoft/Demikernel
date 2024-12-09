@@ -35,6 +35,9 @@ class BaseJob:
     def repository(self) -> str:
         return self.config["repository"]
 
+    def skip_git(self) -> bool:
+        return self.config["skip_git"]
+
     def enable_nfs(self) -> bool:
         return self.config["enable_nfs"]
 

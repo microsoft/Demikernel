@@ -22,6 +22,10 @@ class CheckoutJobOnLinux(BaseLinuxJob):
         super().__init__(config, "checkout")
 
     def execute(self) -> bool:
+        if super().skip_git():
+            print("--skip_git is set to True, skipping git checkout")
+            return True
+
         serverTask: CheckoutOnLinux = CheckoutOnLinux(
             super().server(), super().repository(), super().branch())
 
