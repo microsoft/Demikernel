@@ -18,10 +18,10 @@ import ci.git as git
 # Runs the CI pipeline.
 def run_pipeline(
         platform: str,
-        log_directory: str, repository: str, branch: str, libos: str, is_debug:
+        log_directory: str, repository: str, skip_git: bool, branch: str, libos: str, is_debug:
         bool, server: str, client: str, test_unit: bool, test_integration: bool,
         test_system: str, server_addr: str, client_addr: str, delay: float, config_path: str,
-        output_dir: str, enable_nfs: bool, install_prefix: str) -> int:
+        output_dir: str, enable_nfs: bool, install_prefix: str) -> dict[str, bool]:
     is_sudo: bool = True if libos == "catnip" or libos == "catpowder" else False
     status: dict[str, bool] = {}
 
@@ -31,6 +31,7 @@ def run_pipeline(
         "client": client,
         "client_name": client,
         "repository": repository,
+        "skip_git": skip_git,
         "branch": branch,
         "libos": libos,
         "is_debug": is_debug,
@@ -175,8 +176,11 @@ def read_args() -> argparse.Namespace:
     # Build options.
     parser.add_argument("--repository", required=True,
                         help="set location of target repository in remote hosts")
-    parser.add_argument("--branch", required=True,
-                        help="set target branch in remote hosts")
+    parser.add_argument("--skip-git", type=bool, required=False, default=False,
+                        help="skip all git operations (assume demikernel project in --repository folder is complete)")
+    parser.add_argument("--branch", required=False,
+                        help="set target branch in remote hosts (required if --skip-git is not set or set to False, "
+                             "ignored if --skip-git is set to True)")
     parser.add_argument("--libos", required=True,
                         help="set target libos in remote hosts")
     parser.add_argument("--debug", required=False,
@@ -222,6 +226,7 @@ def main():
 
     # Extract build options.
     repository: str = args.repository
+    skip_git: bool = args.skip_git
     branch: str = args.branch
     libos: str = args.libos
     is_debug: bool = args.debug
@@ -241,8 +246,11 @@ def main():
     output_dir: str = args.output_dir
 
     # Initialize glboal variables.
-    head_commit: str = git.get_head_commit(branch)
-    set_commit_hash(head_commit)
+    if skip_git:
+        print("Skipping git operations")
+    else:
+        head_commit: str = git.get_head_commit(branch)
+        set_commit_hash(head_commit)
     set_libos(libos)
 
     # Create folder for test logs
@@ -260,7 +268,16 @@ def main():
         print("Invalid (platform, libos) combination.")
         sys.exit(-1)
 
-    status: dict = run_pipeline(platform, log_directory, repository, branch, libos, is_debug, server,
+    # Check --branch is defined if --skip-git is False
+    if not skip_git:
+        if branch is None or len(branch) == 0:
+            print("--branch argument is required if --skip-git is not set or set to False.")
+            sys.exit(-1)
+
+    if skip_git and branch is not None and len(branch) > 0:
+        print("WARNING: --skip-git is set to True, ignoring --branch argument...")
+
+    status: dict = run_pipeline(platform, log_directory, repository, skip_git, branch, libos, is_debug, server,
                                 client, test_unit, test_integration, test_system, server_addr,
                                 client_addr, delay, config_path, output_dir, enable_nfs, install_prefix)
 

@@ -13,6 +13,10 @@ class JobFactory:
         self.config = config
 
     def checkout(self) -> BaseJob:
+        if self.config["skip_git"]:
+            print("--skip_git is set to True, skipping git checkout")
+            return True
+
         if self.config["platform"] == "windows":
             return windows.CheckoutJobOnWindows(self.config)
         else:
