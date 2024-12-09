@@ -78,7 +78,7 @@ impl Scope {
 
     /// Enter this scope. Returns a `Guard` instance that should be dropped when leaving the scope.
     #[inline]
-    pub fn enter(&mut self) -> Guard {
+    pub fn enter(&self) -> Guard {
         Guard::enter()
     }
 

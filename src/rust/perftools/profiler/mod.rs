@@ -43,7 +43,7 @@ thread_local!(
 /// create an instance of `Profiler`.
 pub struct Profiler {
     root_scopes: Vec<Rc<RefCell<Scope>>>,
-    current: Option<Rc<RefCell<Scope>>>,
+    current_scope: Option<Rc<RefCell<Scope>>>,
     perf_callback: Option<demi_callback_t>,
 }
 
@@ -70,7 +70,7 @@ impl Profiler {
     fn new() -> Profiler {
         Profiler {
             root_scopes: Vec::new(),
-            current: None,
+            current_scope: None,
             perf_callback: None,
         }
     }
@@ -116,7 +116,7 @@ impl Profiler {
     }
 
     pub fn get_or_create_scope(&mut self, name: &'static str) -> Rc<RefCell<Scope>> {
-        match self.current.as_ref() {
+        match self.current_scope.as_ref() {
             Some(current_scope) => {
                 let existing_scope = current_scope
                     .borrow()
@@ -139,8 +139,8 @@ impl Profiler {
     }
 
     fn enter_scope(&mut self, scope: Rc<RefCell<Scope>>) -> Guard {
-        let guard = scope.borrow_mut().enter();
-        self.current = Some(scope);
+        let guard = scope.borrow().enter();
+        self.current_scope = Some(scope);
 
         guard
     }
@@ -156,9 +156,9 @@ impl Profiler {
 
     #[inline]
     fn leave_scope(&mut self, duration: u64) {
-        self.current = if let Some(current) = self.current.as_ref() {
-            current.borrow_mut().leave(duration);
-            current.borrow().parent_scope.as_ref().cloned()
+        self.current_scope = if let Some(current_scope) = self.current_scope.as_ref() {
+            current_scope.borrow_mut().leave(duration);
+            current_scope.borrow().parent_scope.as_ref().cloned()
         } else {
             // This should not happen with proper usage.
             log::error!("Called perftools::profiler::leave() while not in any scope");
