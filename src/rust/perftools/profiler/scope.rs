@@ -146,7 +146,7 @@ impl<'a, F: Future> AsyncScope<'a, F> {
 impl Guard {
     #[inline]
     pub fn enter() -> Self {
-        let (now, _): (u64, u32) = unsafe { x86::time::rdtscp() };
+        let now: u64 = unsafe { x86::time::rdtscp().0 };
         Self { enter_time: now }
     }
 }
@@ -175,7 +175,7 @@ impl<'a, F: Future> Future for AsyncScope<'a, F> {
 impl Drop for Guard {
     #[inline]
     fn drop(&mut self) {
-        let (now, _): (u64, u32) = unsafe { x86::time::rdtscp() };
+        let now: u64 = unsafe { x86::time::rdtscp().0 };
         let duration: u64 = now - self.enter_time;
 
         PROFILER.with(|p| p.borrow_mut().leave_scope(duration));
