@@ -20,7 +20,7 @@ and feedback. Please send any questions or comments to one of the following
 maintainers of the project:
 
 - [Irene Zhang](https://github.com/iyzhang) - [irene.zhang@microsoft.com](mailto:irene.zhang@microsoft.com)
-- [Pedro Henrique Penna](https://github.com/ppenna) - [ppenna@microsoft.com](mailto:ppenna@microsoft.com)
+- [Anand Bonde](https://github.com/anandbonde) - [anand.bonde@gmail.com](mailto:anand.bonde@gmail.com)
 
 > By sending feedback, you are consenting that it may be used  in the further
 > development of this project.

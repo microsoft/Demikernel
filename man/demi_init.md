@@ -17,24 +17,6 @@ int demi_init(int argc, char *const argv[]);
 `demi_init()` initializes Demikernel. It sets up devices, instantiates LibOSes, and performs general initialization
 tasks.
 
-The `argv` parameter is an array of argument strings passed to Demikernel. The `argc` parameter is a positive integer
-that specifies the length of that array.
-
-The array of argument strings provides Demikernel with various information that are critical for its initialization. For
-instance, these arguments shall state which LibOSes should be initialized, and whether or not runtime features shall be
-turned on.
-
-All arguments supported by Demikernel are listed in the table below. Arguments that are not listed therein are ignored.
-
-| ID      | Argument      | Description                       | Supported OS |
-| ------- | ------------- | --------------------------------- | ------------ |
-| `ARG-4` | `--catnap`    | Enables Linux Sockets LibOS       | Linux        |
-| `ARG-5` | `--catnip`    | Enables DPDK LibOS                | Linux        |
-| `ARG-6` | `--catpowder` | Enables Linux Raw Sockets LibOS   | Linux        |
-
-These arguments are mutually exclusive. Demikernel currently does not support multiple LibOSes to co-exist.
-[Issue #158](https://github.com/demikernel/demikernel/issues/158) tracks progress of this feature.
-
 ## Return Value
 
 On success, zero is returned. On error, a positive error code is returned and any subsequent call to Demikernel may

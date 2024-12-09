@@ -18,9 +18,7 @@ use std::{
 
 fn main() -> Result<()> {
     // Merge all lines
-    let matches: ArgMatches = Command::new("app")
-        .author("Pedro Henrique Penna <ppenna@microsoft.com>")
-        .about("Network Testing Tool for Demikernel")
+    let matches: ArgMatches = Command::new("demikernel-network-simulator")
         .arg(
             Arg::new("src")
                 .long("src")
