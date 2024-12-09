@@ -36,9 +36,14 @@ class RunOnLinux(BaseLinuxTask):
 
 
 class CleanupOnLinux(BaseLinuxTask):
-    def __init__(self, host: str, repository: str, is_sudo: bool, branch: str):
+    def __init__(self, host: str, repository: str, is_sudo: bool, branch: str, skip_git: bool):
         sudo_cmd: str = "sudo -E" if is_sudo else ""
-        cmd: str = f"cd {repository} && {sudo_cmd} make clean && git checkout {branch} && git clean -fdx ; sudo -E rm -rf /dev/shm/demikernel* ; sudo pkill -f demikernel*"
+        cmd: str = f"cd {repository} && {sudo_cmd} make clean "
+        if skip_git:
+            print("--skip-git is set to True, skipping git cleanup")
+        else:
+            cmd: str = cmd + "; git checkout ; git clean -fdx"
+        cmd:str = cmd + "; sudo -E rm -rf /dev/shm/demikernel* ; sudo pkill -f demikernel*"
         super().__init__(host, cmd)
 
 

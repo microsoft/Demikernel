@@ -61,11 +61,11 @@ class CleanupJobOnLinux(BaseLinuxJob):
     def execute(self) -> bool:
         default_branch: str = "dev"
         serverTask: CleanupOnLinux = CleanupOnLinux(
-            super().server(), super().repository(), super().is_sudo(), default_branch)
+            super().server(), super().repository(), super().is_sudo(), default_branch, super().skip_git())
 
         if not super().enable_nfs():
             clientTask: CleanupOnLinux = CleanupOnLinux(
-                super().client(), super().repository(), super().is_sudo(), default_branch)
+                super().client(), super().repository(), super().is_sudo(), default_branch, super().skip_git())
             return super().execute(serverTask, clientTask)
         return super().execute(serverTask)
 

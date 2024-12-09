@@ -52,7 +52,11 @@ class RunOnWindows(BaseWindowsTask):
 
 
 class CleanupOnWindows(BaseWindowsTask):
-    def __init__(self, host: str, repository: str, is_sudo: bool, branch: str):
+    def __init__(self, host: str, repository: str, is_sudo: bool, branch: str, skip_git: bool):
         env_cmd = BaseWindowsTask._build_env_cmd()
-        cmd: str = f"cd {repository} ; {env_cmd} ; nmake clean ; git checkout ; git clean -fdx"
+        cmd: str = f"cd {repository} ; {env_cmd} ; nmake clean "
+        if skip_git:
+            print("--skip-git is set to True, skipping git cleanup")
+        else:
+            cmd: str = cmd + "; git checkout ; git clean -fdx"
         super().__init__(host, cmd)
