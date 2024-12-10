@@ -186,7 +186,7 @@ impl Peer {
         }?;
 
         if EphemeralPorts::is_private(socket_addr_v4.port()) {
-            self.ephemeral_ports.reserve(socket_addr_v4.port())?;
+            let _ = self.ephemeral_ports.reserve(socket_addr_v4.port());
         }
 
         Ok(())
@@ -319,7 +319,7 @@ impl Peer {
             },
         };
         match local_port {
-            Some(port) if EphemeralPorts::is_private(port) => self.ephemeral_ports.free(port),
+            //Some(port) if EphemeralPorts::is_private(port) => self.ephemeral_ports.free(port),
             _ => Ok(()),
         }
     }
@@ -346,7 +346,7 @@ impl Peer {
             },
         };
         match local_port {
-            Some(port) if EphemeralPorts::is_private(port) => self.ephemeral_ports.free(port),
+            //Some(port) if EphemeralPorts::is_private(port) => self.ephemeral_ports.free(port),
             _ => Ok(()),
         }
     }
