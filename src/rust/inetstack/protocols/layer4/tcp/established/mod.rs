@@ -17,7 +17,6 @@ mod sender;
 
 use crate::{
     async_timer,
-    collections::async_queue::SharedAsyncQueue,
     inetstack::{
         config::TcpConfig,
         consts::MSL,
@@ -39,7 +38,7 @@ use crate::{
 use ::futures::pin_mut;
 use ::futures::FutureExt;
 use ::std::{
-    net::{Ipv4Addr, SocketAddrV4},
+    net::SocketAddrV4,
     ops::{Deref, DerefMut},
     time::Duration,
     time::Instant,
@@ -78,7 +77,7 @@ impl SharedEstablishedSocket {
         remote: SocketAddrV4,
         mut runtime: SharedDemiRuntime,
         layer3_endpoint: SharedLayer3Endpoint,
-        mut recv_queue: SharedAsyncQueue<(Ipv4Addr, TcpHeader, DemiBuffer)>,
+        data_from_ack: Option<(TcpHeader, DemiBuffer)>,
         tcp_config: TcpConfig,
         default_socket_options: TcpSocketOptions,
         receiver_seq_no: SeqNumber,
@@ -164,9 +163,8 @@ impl SharedEstablishedSocket {
             layer3_endpoint,
         }));
 
-        trace!("inital receive_queue size {:?}", recv_queue.len());
-        // Process all pending received packets while setting up the connection.
-        while let Some((_ipv4_addr, header, data)) = recv_queue.try_pop() {
+        // Process data carried with the response to the SYN+ACK
+        if let Some((header, data)) = data_from_ack {
             me.receive(header, data);
         }
         let me2: Self = me.clone();
