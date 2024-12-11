@@ -7,17 +7,19 @@
 // Imports
 //======================================================================================================================
 
-use crate::{perftools::profiler::PROFILER, runtime::types::demi_callback_t};
+use crate::{
+    perftools::profiler::PROFILER,
+    runtime::{types::demi_callback_t, SharedObject},
+};
 use ::std::{
-    cell::RefCell,
     fmt::{self, Debug},
     future::Future,
     io,
     pin::Pin,
-    rc::Rc,
     task::{Context, Poll},
     thread,
 };
+use std::ops::{Deref, DerefMut};
 
 //======================================================================================================================
 // Structures
@@ -27,14 +29,17 @@ use ::std::{
 /// profiled blocks.
 pub struct Scope {
     pub name: &'static str,
-    pub parent_scope: Option<Rc<RefCell<Scope>>>,
-    pub children_scopes: Vec<Rc<RefCell<Scope>>>,
+    pub parent_scope: Option<SharedScope>,
+    pub children_scopes: Vec<SharedScope>,
     /// Callback to report statistics. If this is set to None, we collect averages by default.
     pub perf_callback: Option<demi_callback_t>,
     pub num_calls: usize,
     /// In total, how much time has been spent in this scope?
     pub duration_sum: u64,
 }
+
+#[derive(Clone)]
+pub struct SharedScope(SharedObject<Scope>);
 
 /// A guard that is created when entering a scope and dropped when leaving it.
 pub struct Guard {
@@ -43,7 +48,7 @@ pub struct Guard {
 
 /// A scope over an async block that may yield and re-enter several times.
 pub struct AsyncScope<'a, F: Future> {
-    scope: Rc<RefCell<Scope>>,
+    scope: SharedScope,
     future: Pin<&'a mut F>,
 }
 
@@ -51,13 +56,19 @@ pub struct AsyncScope<'a, F: Future> {
 // Associated Functions
 //======================================================================================================================
 
-impl Scope {
+impl SharedScope {
     pub fn new(
         name: &'static str,
-        parent_scope: Option<Rc<RefCell<Scope>>>,
+        parent_scope: Option<SharedScope>,
         perf_callback: Option<demi_callback_t>,
-    ) -> Scope {
-        Scope {
+    ) -> SharedScope {
+        Self(SharedObject::new(Scope::new(name, parent_scope, perf_callback)))
+    }
+}
+
+impl Scope {
+    pub fn new(name: &'static str, parent_scope: Option<SharedScope>, perf_callback: Option<demi_callback_t>) -> Scope {
+        Self {
             name,
             parent_scope,
             children_scopes: Vec::new(),
@@ -67,7 +78,7 @@ impl Scope {
         }
     }
 
-    pub fn add_child_scope(&mut self, child_scope: Rc<RefCell<Scope>>) {
+    pub fn add_child_scope(&mut self, child_scope: SharedScope) {
         self.children_scopes.push(child_scope.clone())
     }
 
@@ -107,9 +118,7 @@ impl Scope {
         let parent_duration_sum: f64 = self
             .parent_scope
             .clone()
-            .map_or((grand_total_duration) as f64, |parent_scope| {
-                (parent_scope.borrow().duration_sum) as f64
-            });
+            .map_or((grand_total_duration) as f64, |s| (s.duration_sum) as f64);
         let percent_time = duration_sum / parent_duration_sum * 100.0;
 
         // Write markers.
@@ -117,6 +126,7 @@ impl Scope {
         for _ in 0..depth {
             markers.push('+');
         }
+
         writeln!(
             out,
             "{},{},{},{},{}",
@@ -127,10 +137,8 @@ impl Scope {
             duration_sum / (self.num_calls as f64) * ns_per_cycle,
         )?;
 
-        // Write children
-        for succ in &self.children_scopes {
-            succ.borrow()
-                .write_recursive(out, thread_id, grand_total_duration, depth + 1, ns_per_cycle)?;
+        for child_scope in &self.children_scopes {
+            child_scope.write_recursive(out, thread_id, grand_total_duration, depth + 1, ns_per_cycle)?;
         }
 
         Ok(())
@@ -138,7 +146,7 @@ impl Scope {
 }
 
 impl<'a, F: Future> AsyncScope<'a, F> {
-    pub fn new(scope: Rc<RefCell<Scope>>, future: Pin<&'a mut F>) -> Self {
+    pub fn new(scope: SharedScope, future: Pin<&'a mut F>) -> Self {
         Self { scope, future }
     }
 }
@@ -155,7 +163,21 @@ impl Guard {
 // Trait Implementations
 //======================================================================================================================
 
-impl Debug for Scope {
+impl Deref for SharedScope {
+    type Target = Scope;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for SharedScope {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Debug for SharedScope {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
     }
@@ -167,7 +189,7 @@ impl<'a, F: Future> Future for AsyncScope<'a, F> {
     fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
         let self_: &mut Self = self.get_mut();
 
-        let _guard = PROFILER.with(|p| p.borrow_mut().enter_scope(self_.scope.clone()));
+        let _guard = PROFILER.with(|p| p.clone().enter_scope(self_.scope.clone()));
         Future::poll(self_.future.as_mut(), ctx)
     }
 }
@@ -178,6 +200,6 @@ impl Drop for Guard {
         let now: u64 = unsafe { x86::time::rdtscp().0 };
         let duration: u64 = now - self.enter_time;
 
-        PROFILER.with(|p| p.borrow_mut().leave_scope(duration));
+        PROFILER.with(|p| p.clone().leave_scope(duration));
     }
 }
