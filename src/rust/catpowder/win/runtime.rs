@@ -72,8 +72,13 @@ impl SharedCatpowderRuntime {
 
         let cohost_mode = config.xdp_cohost_mode()?;
         let (tcp_ports, udp_ports) = if cohost_mode {
-            trace!("XDP cohost mode enabled.");
-            config.xdp_cohost_ports()?
+            let (tcp_ports, udp_ports) = config.xdp_cohost_ports()?;
+            trace!(
+                "XDP cohost mode enabled. TCP ports: {:?}, UDP ports: {:?}",
+                tcp_ports,
+                udp_ports
+            );
+            (tcp_ports, udp_ports)
         } else {
             trace!("XDP not cohosted; will redirect all traffic");
             (vec![], vec![])
@@ -190,6 +195,7 @@ impl PhysicalLayer for SharedCatpowderRuntime {
                 let dbuf: DemiBuffer = DemiBuffer::from_slice(&*xdp_buffer)?;
                 rx.release_rx(Self::RING_LENGTH);
 
+                trace!("receive(): pkt_size={:?}", dbuf.len());
                 ret.push(dbuf);
 
                 rx.reserve_rx_fill(Self::RING_LENGTH, &mut idx);
@@ -198,7 +204,7 @@ impl PhysicalLayer for SharedCatpowderRuntime {
                 rx.submit_rx_fill(Self::RING_LENGTH);
 
                 if ret.is_full() {
-                    break;
+                    return Ok(ret);
                 }
             }
         }
@@ -209,6 +215,7 @@ impl PhysicalLayer for SharedCatpowderRuntime {
                 let dbuf: DemiBuffer = DemiBuffer::from_slice(&*xdp_buffer)?;
                 rx.release_rx(Self::RING_LENGTH);
 
+                trace!("receive(): pkt_size={:?}", dbuf.len());
                 ret.push(dbuf);
 
                 rx.reserve_rx_fill(Self::RING_LENGTH, &mut idx);
@@ -217,7 +224,7 @@ impl PhysicalLayer for SharedCatpowderRuntime {
                 rx.submit_rx_fill(Self::RING_LENGTH);
 
                 if ret.is_full() {
-                    break;
+                    return Ok(ret);
                 }
             }
         }
