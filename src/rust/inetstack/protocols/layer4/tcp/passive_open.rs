@@ -366,13 +366,27 @@ impl SharedPassiveSocket {
         remote_window_scale_bits: Option<u8>,
         mss: usize,
     ) -> Result<SharedEstablishedSocket, Fail> {
-        let (ipv4_hdr, tcp_hdr, buf) = recv_queue.pop(None).await?;
-        debug!("Received ACK: {:?}", tcp_hdr);
-
-        // Check the ack sequence number.
-        if tcp_hdr.ack_num != local_isn + SeqNumber::from(1) {
-            return Err(Fail::new(EBADMSG, "invalid SYN+ACK seq num"));
-        }
+        let (tcp_hdr, buf): (TcpHeader, DemiBuffer) = loop {
+            match recv_queue.pop(None).await? {
+                // We expect to get a SYN+ACK with the initial seq number plus 1.
+                (_, tcp_hdr, buf) if tcp_hdr.ack && tcp_hdr.ack_num == local_isn + SeqNumber::from(1) => {
+                    debug!("Received ACK: {:?}", tcp_hdr);
+                    break (tcp_hdr, buf);
+                },
+                // We got an ACK but not for the right sequence number.
+                (_, tcp_hdr, _) if tcp_hdr.ack => {
+                    let cause = "invalid SYN+ACK seq num";
+                    warn!("{}: {:?}", cause, tcp_hdr);
+                    return Err(Fail::new(EBADMSG, &cause));
+                },
+                // We got a duplicate SYN, so ignore it.
+                (_, tcp_hdr, _) if tcp_hdr.syn && tcp_hdr.ack_num == local_isn => {
+                    debug!("Received duplicate SYN: {:?}", tcp_hdr)
+                },
+                // We didn't get any kind of expected packet.
+                _ => return Err(Fail::new(EBADMSG, "must contain an ACK")),
+            }
+        };
 
         // Calculate the window.
         let (local_window_scale_bits, remote_window_scale_bits): (u8, u8) = match remote_window_scale_bits {
@@ -412,17 +426,14 @@ impl SharedPassiveSocket {
             local_window_scale_bits, remote_window_scale_bits
         );
 
-        // If there is data with the SYN+ACK, deliver it.
-        if !buf.is_empty() {
-            recv_queue.push((ipv4_hdr, tcp_hdr, buf));
-        }
-
+        // Check if there is data and if so, pass it along to the established header.
+        let data_with_ack: Option<(TcpHeader, DemiBuffer)> = if buf.is_empty() { None } else { Some((tcp_hdr, buf)) };
         let new_socket: SharedEstablishedSocket = SharedEstablishedSocket::new(
             self.local,
             remote,
             self.runtime.clone(),
             self.layer3_endpoint.clone(),
-            recv_queue.clone(),
+            data_with_ack,
             self.tcp_config.clone(),
             self.socket_options,
             remote_isn + SeqNumber::from(1),

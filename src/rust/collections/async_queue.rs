@@ -100,6 +100,7 @@ impl<T> AsyncQueue<T> {
         self.queue.iter()
     }
 
+    #[allow(unused)]
     /// Get an iterator over mutable values
     pub fn get_mut_values(&mut self) -> IterMut<T> {
         self.queue.iter_mut()

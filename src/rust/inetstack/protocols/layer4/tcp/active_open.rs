@@ -198,7 +198,7 @@ impl SharedActiveOpenSocket {
             self.remote,
             self.runtime.clone(),
             self.layer3_endpoint.clone(),
-            self.recv_queue.clone(),
+            None,
             self.tcp_config.clone(),
             self.socket_options,
             remote_seq_num,
