@@ -21,7 +21,7 @@ fn evict_with_default_ttl() -> Result<()> {
     let later = now + ttl;
 
     // Insert an IPv4 address in the ARP Cache.
-    let mut cache = ArpCache::new(now, Some(ttl), None, true);
+    let mut cache = ArpCache::new(now, Some(ttl), None, true, None);
     cache.insert(test_helpers::ALICE_IPV4, test_helpers::ALICE_MAC);
     crate::ensure_eq!(cache.get(test_helpers::ALICE_IPV4), Some(&test_helpers::ALICE_MAC));
 
@@ -47,7 +47,7 @@ fn import() -> Result<()> {
     map.insert(test_helpers::ALICE_IPV4, test_helpers::ALICE_MAC);
 
     // Create an ARP Cache and import address resolution map.
-    let cache = ArpCache::new(now, Some(ttl), Some(&map), true);
+    let cache = ArpCache::new(now, Some(ttl), Some(&map), true, None);
 
     // Check if address resolutions are in the ARP Cache.
     crate::ensure_eq!(cache.get(test_helpers::ALICE_IPV4), Some(&test_helpers::ALICE_MAC));
@@ -62,7 +62,7 @@ fn export() -> Result<()> {
     let ttl = Duration::from_secs(1);
 
     // Insert an IPv4 address in the ARP Cache.
-    let mut cache = ArpCache::new(now, Some(ttl), None, true);
+    let mut cache = ArpCache::new(now, Some(ttl), None, true, None);
     cache.insert(test_helpers::ALICE_IPV4, test_helpers::ALICE_MAC);
     crate::ensure_eq!(cache.get(test_helpers::ALICE_IPV4), Some(&test_helpers::ALICE_MAC));
 

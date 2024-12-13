@@ -72,6 +72,7 @@ impl SharedArpPeer {
             Some(arp_config.get_cache_ttl()),
             Some(arp_config.get_initial_values()),
             arp_config.is_enabled(),
+            arp_config.get_dummy_mac(),
         );
 
         let peer: SharedArpPeer = Self(SharedObject::new(ArpPeer {

@@ -30,5 +30,6 @@ inetstack_config:
   enable_jumbo_frames: false
   udp_checksum_offload: false
   tcp_checksum_offload: false
+  arp_dummy_mac_address: "00:00:00:00:00:00"
 
 # vim: set tabstop=2 shiftwidth=2

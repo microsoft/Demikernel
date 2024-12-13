@@ -19,6 +19,7 @@ pub struct ArpConfig {
     retry_count: usize,
     initial_values: HashMap<Ipv4Addr, MacAddress>,
     is_enabled: bool,
+    dummy_mac_addr: Option<MacAddress>,
 }
 
 //======================================================================================================================
@@ -34,15 +35,18 @@ impl ArpConfig {
                 retry_count: config.arp_request_retries()?,
                 initial_values,
                 is_enabled: true,
+                dummy_mac_addr: None,
             })
         } else {
             warn!("disabling arp");
+
             Ok(Self {
                 cache_ttl: Duration::ZERO,
                 request_timeout: Duration::ZERO,
                 retry_count: 0,
                 initial_values: HashMap::new(),
                 is_enabled: false,
+                dummy_mac_addr: config.arp_dummy_mac_address().ok(),
             })
         }
     }
@@ -66,6 +70,10 @@ impl ArpConfig {
     pub fn is_enabled(&self) -> bool {
         self.is_enabled
     }
+
+    pub fn get_dummy_mac(&self) -> Option<MacAddress> {
+        self.dummy_mac_addr
+    }
 }
 
 //======================================================================================================================
@@ -80,6 +88,7 @@ impl Default for ArpConfig {
             retry_count: 5,
             initial_values: HashMap::new(),
             is_enabled: true,
+            dummy_mac_addr: None,
         }
     }
 }

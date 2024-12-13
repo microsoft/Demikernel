@@ -40,6 +40,7 @@ mod inetstack_config {
     pub const ARP_CACHE_TTL: &str = "arp_cache_ttl";
     pub const ARP_REQUEST_TIMEOUT: &str = "arp_request_timeout";
     pub const ARP_REQUEST_RETRIES: &str = "arp_request_retries";
+    pub const ARP_DUMMY_MAC_ADDRESS: &str = "arp_dummy_mac_address";
     pub const MTU: &str = "mtu";
     pub const MSS: &str = "mss";
     pub const ENABLE_JUMBO_FRAMES: &str = "enable_jumbo_frames";
@@ -282,6 +283,27 @@ impl Config {
             Self::get_int_option(self.get_inetstack_config()?, inetstack_config::ARP_REQUEST_RETRIES)?
         };
         Ok(retries)
+    }
+
+    pub fn arp_dummy_mac_address(&self) -> Result<MacAddress, Fail> {
+        let dummy_mac_address: MacAddress = if let Some(dummy_mac_address) =
+            Self::get_typed_env_option::<String>(inetstack_config::ARP_DUMMY_MAC_ADDRESS)?
+        {
+            MacAddress::parse_canonical_str(dummy_mac_address.as_str())?
+        } else {
+            Self::get_typed_str_option(
+                self.get_inetstack_config()?,
+                inetstack_config::ARP_DUMMY_MAC_ADDRESS,
+                |val: &str| {
+                    if let Ok(dummy_mac_address) = MacAddress::parse_canonical_str(val) {
+                        Some(dummy_mac_address)
+                    } else {
+                        None
+                    }
+                },
+            )?
+        };
+        Ok(dummy_mac_address)
     }
 
     #[cfg(all(feature = "catpowder-libos", target_os = "linux"))]
