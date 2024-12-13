@@ -158,10 +158,7 @@ impl SharedTcpPeer {
         {
             // We should panic here because the ephemeral port allocator should not allocate the same port more than
             // once.
-            unreachable!(
-                "There is already a socket listening on this address: {:?} {:?}",
-                local, remote
-            );
+            return Err(Fail::new(libc::EADDRINUSE, "address already in use"));
         }
         let local_isn: SeqNumber = self.isn_generator.generate(&local, &remote);
         // Wait for connect to complete.
