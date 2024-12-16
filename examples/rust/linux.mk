@@ -21,7 +21,6 @@ all: all-examples
 	cp -f $(BUILD_DIR)/examples/tcp-wait $(BINDIR)/examples/rust/tcp-wait.$(EXEC_SUFFIX)
 
 all-examples:
-	@echo "$(CARGO) build --examples $(CARGO_FEATURES) $(CARGO_FLAGS)"
 	$(CARGO) build --examples $(CARGO_FEATURES) $(CARGO_FLAGS)
 
 clean:

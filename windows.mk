@@ -132,7 +132,6 @@ install:
 all-libs:
 	@echo "LD_LIBRARY_PATH: $(LD_LIBRARY_PATH)"
 	@echo "XDP_PATH: $(XDP_PATH)"
-	@echo "$(CARGO) build --libs $(CARGO_FEATURES) $(CARGO_FLAGS)"
 	set XDP_PATH=$(XDP_PATH)
 	set RUSTFLAGS=$(RUSTFLAGS)
 	$(CARGO) build --lib $(CARGO_FEATURES) $(CARGO_FLAGS)
@@ -147,7 +146,6 @@ all-libs:
 all-tests: all-tests-rust all-tests-c
 
 all-tests-rust: all-libs
-	@echo "$(CARGO) build --tests $(CARGO_FEATURES) $(CARGO_FLAGS)"
 	set RUSTFLAGS=$(RUSTFLAGS)
 	$(CARGO) build --tests $(CARGO_FEATURES) $(CARGO_FLAGS)
 
