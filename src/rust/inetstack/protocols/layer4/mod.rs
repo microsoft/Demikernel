@@ -86,19 +86,19 @@ impl Peer {
     }
 
     pub fn poll_once(&mut self) {
-        match {
-            timer!("inetstack::layer4_endpoint::poll_once");
-
-            self.layer3_endpoint.receive()
-        } {
-            Ok(batch) if !batch.is_empty() => self.receive_batch(batch),
-            Ok(_) => (),
+        timer!("inetstack::layer4::poll_once");
+        match self.layer3_endpoint.receive() {
+            Ok(batch) => {
+                if !batch.is_empty() {
+                    self.receive_batch(batch)
+                }
+            },
             Err(_) => warn!("Could not receive from network interface, continuing ..."),
         }
     }
 
     fn receive_batch(&mut self, batch: ArrayVec<(Ipv4Addr, IpProtocol, DemiBuffer), RECEIVE_BATCH_SIZE>) {
-        timer!("inetstack::poll_bg_work::for::for");
+        timer!("inetstack::layer4::receive_batch");
         trace!("found packets: {:?}", batch.len());
         for (src_ipv4_addr, ip_type, payload) in batch {
             match ip_type {
