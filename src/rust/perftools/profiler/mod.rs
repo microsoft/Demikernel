@@ -155,9 +155,7 @@ impl Profiler {
             current_scope.parent_scope.as_ref().cloned()
         } else {
             // This should not happen with proper usage.
-            log::error!("Called perftools::profiler::leave() while not in any scope");
-
-            None
+            unreachable!("Called perftools::profiler::leave() while not in any scope");
         };
     }
 

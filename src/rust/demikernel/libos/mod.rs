@@ -206,7 +206,6 @@ impl LibOS {
     #[allow(unused_variables)]
     pub fn accept(&mut self, sockqd: QDesc) -> Result<QToken, Fail> {
         let result: Result<QToken, Fail> = {
-            timer!("demikernel::accept");
             match self {
                 LibOS::NetworkLibOS(libos) => libos.accept(sockqd),
             }
@@ -220,7 +219,6 @@ impl LibOS {
     #[allow(unused_variables)]
     pub fn connect(&mut self, sockqd: QDesc, remote: SocketAddr) -> Result<QToken, Fail> {
         let result: Result<QToken, Fail> = {
-            timer!("demikernel::connect");
             match self {
                 LibOS::NetworkLibOS(libos) => libos.connect(sockqd, remote),
             }
@@ -234,7 +232,6 @@ impl LibOS {
     /// Closes an I/O queue. async_close() + wait() achieves the same effect as this synchronous function.
     pub fn close(&mut self, qd: QDesc) -> Result<(), Fail> {
         let result: Result<(), Fail> = {
-            timer!("demikernel::close");
             match self {
                 LibOS::NetworkLibOS(libos) => match libos.async_close(qd) {
                     Ok(qt) => match self.wait(qt, None) {
@@ -253,7 +250,6 @@ impl LibOS {
 
     pub fn async_close(&mut self, qd: QDesc) -> Result<QToken, Fail> {
         let result: Result<QToken, Fail> = {
-            timer!("demikernel::async_close");
             match self {
                 LibOS::NetworkLibOS(libos) => libos.async_close(qd),
             }
@@ -267,7 +263,6 @@ impl LibOS {
     /// Pushes a scatter-gather array to an I/O queue.
     pub fn push(&mut self, qd: QDesc, sga: &demi_sgarray_t) -> Result<QToken, Fail> {
         let result: Result<QToken, Fail> = {
-            timer!("demikernel::push");
             match self {
                 LibOS::NetworkLibOS(libos) => libos.push(qd, sga),
             }
@@ -282,7 +277,6 @@ impl LibOS {
     #[allow(unused_variables)]
     pub fn pushto(&mut self, qd: QDesc, sga: &demi_sgarray_t, to: SocketAddr) -> Result<QToken, Fail> {
         let result: Result<QToken, Fail> = {
-            timer!("demikernel::pushto");
             match self {
                 LibOS::NetworkLibOS(libos) => libos.pushto(qd, sga, to),
             }
@@ -296,8 +290,6 @@ impl LibOS {
     /// Pops data from a an I/O queue.
     pub fn pop(&mut self, qd: QDesc, size: Option<usize>) -> Result<QToken, Fail> {
         let result: Result<QToken, Fail> = {
-            timer!("demikernel::pop");
-
             // Check if this is a fixed-size pop.
             if let Some(size) = size {
                 // Check if size is valid.
