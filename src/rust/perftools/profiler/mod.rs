@@ -23,12 +23,10 @@ use crate::{
 use ::futures::future::FusedFuture;
 use ::std::{
     io,
-    pin::Pin,
-    time::{Duration, SystemTime},
-};
-use std::{
     ops::{Deref, DerefMut},
+    pin::Pin,
     thread,
+    time::{Duration, SystemTime},
 };
 
 //======================================================================================================================
@@ -105,7 +103,7 @@ impl Profiler {
     #[inline]
     pub fn sync_scope(&mut self, name: &'static str) -> Guard {
         let scope = self.get_or_create_scope(name);
-        self.enter_scope(scope)
+        self.enter_scope(&scope)
     }
 
     fn get_or_create_root_scope(&mut self, name: &'static str) -> SharedScope {
@@ -135,9 +133,9 @@ impl Profiler {
         }
     }
 
-    fn enter_scope(&mut self, scope: SharedScope) -> Guard {
+    fn enter_scope(&mut self, scope: &SharedScope) -> Guard {
         let guard = scope.enter();
-        self.current_scope = Some(scope);
+        self.current_scope = Some(scope.clone());
         guard
     }
 
@@ -165,16 +163,16 @@ impl Profiler {
 
     fn write<W: io::Write>(&self, out: &mut W) -> io::Result<()> {
         let thread_id = thread::current().id();
-        let grand_total_duration = { self.root_scopes.iter().map(|s| s.duration_sum).sum() };
         let ns_per_cycle = Self::measure_ns_per_cycle();
 
         // Header row
         writeln!(
             out,
-            "call_depth,thread_id,function_name,num_calls,percent_time,cycles_per_call,nanoseconds_per_call"
+            "call_depth,thread_id,function_name,num_calls,cycles_per_call,nanoseconds_per_call,total_duration,total_duration_exclusive"
         )?;
 
-        self.write_root_scopes(out, thread_id, grand_total_duration, ns_per_cycle)?;
+        self.write_root_scopes(out, thread_id, ns_per_cycle)?;
+
         out.flush()
     }
 
@@ -182,11 +180,10 @@ impl Profiler {
         &self,
         out: &mut W,
         thread_id: thread::ThreadId,
-        grand_total_duration: u64,
         ns_per_cycle: f64,
     ) -> Result<(), io::Error> {
         for s in self.root_scopes.iter() {
-            s.write_recursive(out, thread_id, grand_total_duration, 0, ns_per_cycle)?;
+            s.write_recursive(out, thread_id, 0, ns_per_cycle)?;
         }
         Ok(())
     }

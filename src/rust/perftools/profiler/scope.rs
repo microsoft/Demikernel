@@ -15,11 +15,11 @@ use ::std::{
     fmt::{self, Debug},
     future::Future,
     io,
+    ops::{Deref, DerefMut},
     pin::Pin,
     task::{Context, Poll},
     thread,
 };
-use std::ops::{Deref, DerefMut};
 
 //======================================================================================================================
 // Structures
@@ -105,21 +105,24 @@ impl Scope {
         }
     }
 
+    pub fn compute_exclusive_duration(&self) -> u64 {
+        let mut children_total_duration: u64 = 0;
+
+        for s in &self.children_scopes {
+            children_total_duration += s.duration_sum;
+        }
+
+        self.duration_sum - children_total_duration
+    }
+
     pub fn write_recursive<W: io::Write>(
         &self,
         out: &mut W,
         thread_id: thread::ThreadId,
-        grand_total_duration: u64,
         depth: usize,
         ns_per_cycle: f64,
     ) -> io::Result<()> {
-        let duration_sum: f64 = (self.duration_sum) as f64;
-        // Use the grand total duration if this is a root scope.
-        let parent_duration_sum: f64 = self
-            .parent_scope
-            .clone()
-            .map_or((grand_total_duration) as f64, |s| (s.duration_sum) as f64);
-        let percent_time = duration_sum / parent_duration_sum * 100.0;
+        let duration_sum: f64 = self.duration_sum as f64;
 
         // Write markers.
         let mut markers = String::from("+");
@@ -129,16 +132,17 @@ impl Scope {
 
         writeln!(
             out,
-            "{},{},{},{},{}",
+            "{},{},{},{},{},{}",
             format!("{},{:?},{}", markers, thread_id, self.name),
             self.num_calls,
-            percent_time,
-            duration_sum / (self.num_calls as f64),
-            duration_sum / (self.num_calls as f64) * ns_per_cycle,
+            (duration_sum / (self.num_calls as f64)).round(),
+            (duration_sum / (self.num_calls as f64) * ns_per_cycle).round(),
+            self.duration_sum,
+            self.compute_exclusive_duration(),
         )?;
 
         for child_scope in &self.children_scopes {
-            child_scope.write_recursive(out, thread_id, grand_total_duration, depth + 1, ns_per_cycle)?;
+            child_scope.write_recursive(out, thread_id, depth + 1, ns_per_cycle)?;
         }
 
         Ok(())
@@ -189,7 +193,7 @@ impl<'a, F: Future> Future for AsyncScope<'a, F> {
     fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
         let self_: &mut Self = self.get_mut();
 
-        let _guard = PROFILER.with(|p| p.clone().enter_scope(self_.scope.clone()));
+        let _guard = PROFILER.with(|p| p.clone().enter_scope(&self_.scope));
         Future::poll(self_.future.as_mut(), ctx)
     }
 }
