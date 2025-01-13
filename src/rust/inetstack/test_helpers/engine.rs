@@ -1,6 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+//======================================================================================================================
+// Imports
+//======================================================================================================================
+
 use crate::{
     demi_sgarray_t,
     demikernel::{config::Config, libos::network::libos::SharedNetworkLibOS},
@@ -19,8 +23,15 @@ use ::std::{
     time::{Duration, Instant},
 };
 
-/// A default amount of time to wait on an operation to complete. This was chosen arbitrarily.
-pub const TIMEOUT_SECONDS: Duration = Duration::from_secs(256);
+//======================================================================================================================
+// Constants
+//======================================================================================================================
+
+const MAX_LOOP_ITERATIONS: usize = 64;
+
+//======================================================================================================================
+// Structures
+//======================================================================================================================
 
 /// A representation of the engine that runs our tests. We keep a references to the highest level of abstraction
 /// (libos) and the lowest (physical layer).
@@ -31,6 +42,10 @@ pub struct Engine {
 }
 
 pub struct SharedEngine(SharedObject<Engine>);
+
+//======================================================================================================================
+// Associated Functions
+//======================================================================================================================
 
 impl SharedEngine {
     pub fn new(config_path: &str, layer1_endpoint: SharedTestPhysicalLayer, now: Instant) -> Result<Self, Fail> {
@@ -48,8 +63,16 @@ impl SharedEngine {
         self.layer1_endpoint.pop_frame()
     }
 
-    pub fn pop_all_frames(&mut self) -> VecDeque<DemiBuffer> {
-        self.layer1_endpoint.pop_all_frames()
+    pub fn pop_expected_frames(&mut self, number_of_frames: usize) -> VecDeque<DemiBuffer> {
+        for _ in 0..MAX_LOOP_ITERATIONS {
+            self.get_runtime().poll_foreground_tasks();
+            self.get_runtime().poll_background_tasks();
+            match self.layer1_endpoint.pop_all_frames() {
+                frames if frames.len() >= number_of_frames => return frames,
+                _ => continue,
+            }
+        }
+        VecDeque::default()
     }
 
     pub fn advance_clock(&mut self, now: Instant) {
@@ -59,9 +82,6 @@ impl SharedEngine {
     pub fn push_frame(&mut self, bytes: DemiBuffer) {
         // We no longer do processing in this function, so we will not know if the packet is dropped or not.
         self.layer1_endpoint.push_frame(bytes);
-        // So poll the scheduler to do the processing.
-        self.libos.get_runtime().poll();
-        self.libos.get_runtime().poll();
     }
 
     pub async fn ipv4_ping(&mut self, dest_ipv4_addr: Ipv4Addr, timeout: Option<Duration>) -> Result<Duration, Fail> {
@@ -87,7 +107,7 @@ impl SharedEngine {
 
     pub fn udp_close(&mut self, socket_fd: QDesc) -> Result<(), Fail> {
         let qt = self.libos.async_close(socket_fd)?;
-        match self.wait(qt, TIMEOUT_SECONDS)? {
+        match self.wait(qt)? {
             (_, OperationResult::Close) => Ok(()),
             _ => unreachable!("close did not succeed"),
         }
@@ -134,39 +154,17 @@ impl SharedEngine {
         self.libos.get_transport().export_arp_cache()
     }
 
-    pub fn poll(&self) {
-        self.libos.get_runtime().poll()
-    }
-
-    pub fn wait(&self, qt: QToken, timeout: Duration) -> Result<(QDesc, OperationResult), Fail> {
-        // First check if the task has already completed.
-        if let Some(result) = self.libos.get_runtime().get_completed_task(&qt) {
-            return Ok(result);
-        }
-
-        // Otherwise, run the scheduler.
-        // Put the QToken into a single element array.
-        let qt_array: [QToken; 1] = [qt];
-        let mut prev: Instant = Instant::now();
-        let mut remaining_time: Duration = timeout;
-
-        // Call run_any() until the task finishes.
-        loop {
-            // Run for one quanta and if one of our queue tokens completed, then return.
-            if let Some((offset, qd, qr)) = self.libos.get_runtime().run_any(&qt_array, remaining_time) {
-                debug_assert_eq!(offset, 0);
-                return Ok((qd, qr));
-            }
-            let now: Instant = Instant::now();
-            let elapsed_time: Duration = now - prev;
-            if elapsed_time >= remaining_time {
-                break;
-            } else {
-                remaining_time = remaining_time - elapsed_time;
-                prev = now;
+    pub fn wait(&self, qt: QToken) -> Result<(QDesc, OperationResult), Fail> {
+        for _ in 0..MAX_LOOP_ITERATIONS {
+            match self.get_runtime().wait_next() {
+                Some((returned_qt, qd, qr)) => {
+                    debug_assert_eq!(returned_qt, qt);
+                    return Ok((qd, qr));
+                },
+                None => continue,
             }
         }
-        Err(Fail::new(libc::ETIMEDOUT, "wait timed out"))
+        Err(Fail::new(libc::ETIMEDOUT, "Should have returned a completed task"))
     }
 
     pub fn get_runtime(&self) -> SharedDemiRuntime {
@@ -180,7 +178,6 @@ impl SharedEngine {
 
 impl Deref for SharedEngine {
     type Target = Engine;
-
     fn deref(&self) -> &Self::Target {
         &self.0
     }
