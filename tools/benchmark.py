@@ -118,7 +118,7 @@ def read_args() -> argparse.Namespace:
     parser.add_argument("--client-addr", required=True,
                         help="sets client address in tests")
     parser.add_argument("--config-path", required=False,
-                        default="\$HOME/config.yaml", help="sets config path")
+                        default="\\$HOME/config.yaml", help="sets config path")
 
     # Other options.
     parser.add_argument("--output-dir", required=False,
