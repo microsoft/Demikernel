@@ -10,10 +10,10 @@ use anyhow::Result;
 use demikernel::{
     demi_sgarray_t,
     runtime::types::{demi_opcode_t, demi_qresult_t},
-    LibOS, QDesc, QToken,
+    timer, LibOS, QDesc, QToken,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     net::SocketAddr,
     time::{Duration, Instant},
 };
@@ -39,7 +39,6 @@ pub struct TcpEchoServer {
     listening_sockqd: QDesc,
     connected_clients: HashSet<QDesc>,
     pending_qtokens: Vec<QToken>,
-    pending_qtokens_reverse: HashMap<QToken, QDesc>,
 }
 
 //======================================================================================================================
@@ -69,7 +68,6 @@ impl TcpEchoServer {
             listening_sockqd,
             connected_clients: HashSet::default(),
             pending_qtokens: Vec::default(),
-            pending_qtokens_reverse: HashMap::default(),
         });
     }
 
@@ -198,26 +196,18 @@ impl TcpEchoServer {
     }
 
     fn handle_close(&mut self, qd: QDesc) -> Result<()> {
-        let qts_drained: HashMap<QToken, QDesc> = self.pending_qtokens_reverse.extract_if(|_k, v| v == &qd).collect();
-        let _: Vec<_> = self
-            .pending_qtokens
-            .extract_if(|x| qts_drained.contains_key(x))
-            .collect();
         self.connected_clients.remove(&qd);
         self.libos.close(qd)?;
         Ok(())
     }
 
-    fn register_operation(&mut self, qd: QDesc, qt: QToken) {
-        self.pending_qtokens_reverse.insert(qt, qd);
+    fn register_operation(&mut self, _: QDesc, qt: QToken) {
         self.pending_qtokens.push(qt);
     }
 
     fn unregister_operation(&mut self, index: usize) -> Result<()> {
-        let qt: QToken = self.pending_qtokens.remove(index);
-        self.pending_qtokens_reverse
-            .remove(&qt)
-            .ok_or(anyhow::anyhow!("unregistered queue token"))?;
+        timer!("unregister");
+        let _: QToken = self.pending_qtokens.remove(index);
         Ok(())
     }
 }
