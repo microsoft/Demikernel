@@ -57,8 +57,6 @@ pub enum LibOS {
 
 impl LibOS {
     pub fn new(libos_name: LibOSName, _perf_callback: Option<demi_callback_t>) -> Result<Self, Fail> {
-        timer!("demikernel::new");
-
         logging::initialize();
 
         let config_path: String = match env::var("CONFIG_PATH") {
@@ -125,7 +123,6 @@ impl LibOS {
         protocol: libc::c_int,
     ) -> Result<QDesc, Fail> {
         let result: Result<QDesc, Fail> = {
-            timer!("demikernel::socket");
             match self {
                 LibOS::NetworkLibOS(libos) => libos.socket(domain, socket_type, protocol),
             }
@@ -177,7 +174,6 @@ impl LibOS {
     #[allow(unused_variables)]
     pub fn bind(&mut self, sockqd: QDesc, local: SocketAddr) -> Result<(), Fail> {
         let result: Result<(), Fail> = {
-            timer!("demikernel::bind");
             match self {
                 LibOS::NetworkLibOS(libos) => libos.bind(sockqd, local),
             }
@@ -192,7 +188,6 @@ impl LibOS {
     #[allow(unused_variables)]
     pub fn listen(&mut self, sockqd: QDesc, backlog: usize) -> Result<(), Fail> {
         let result: Result<(), Fail> = {
-            timer!("demikernel::listen");
             match self {
                 LibOS::NetworkLibOS(libos) => libos.listen(sockqd, backlog),
             }
