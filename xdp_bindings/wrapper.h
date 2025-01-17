@@ -98,3 +98,18 @@ _XskRingGetElement(
     _In_ const XSK_RING *Ring,
     _In_ UINT32 Index
     );
+
+BOOLEAN
+_XskRingProducerNeedPoke(
+    _In_ const XSK_RING *Ring
+    );
+
+BOOLEAN
+_XskRingError(
+    _In_ const XSK_RING *Ring
+    );
+
+UINT32
+_XskRingGetFlags(
+    _In_ const XSK_RING *Ring
+    );
