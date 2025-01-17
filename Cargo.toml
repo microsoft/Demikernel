@@ -134,7 +134,6 @@ libxdp = ["demikernel-xdp-bindings"]
 mlx4 = ["demikernel-dpdk-bindings/mlx4"]
 mlx5 = ["demikernel-dpdk-bindings/mlx5"]
 profiler = []
-auto-calibrate = []
 
 
 [profile.release]

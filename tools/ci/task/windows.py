@@ -14,13 +14,13 @@ class BaseWindowsTask(BaseTask):
 
     @staticmethod
     def _build_env_cmd() -> str:
-        rust_path = "\$RustPath = Join-Path \$Env:HOME \\.cargo\\bin"
-        git_path = "\$GitPath = Join-Path \$Env:ProgramFiles \\Git\\cmd"
-        env_path_git = "\$Env:Path += \$GitPath + \';\'"
-        env_path_rust = "\$Env:Path += \$RustPath + \';\'"
-        vs_install_path = "\$VsInstallPath = &(Join-Path \${Env:ProgramFiles(x86)} '\\Microsoft Visual Studio\\Installer\\vswhere.exe') -latest -property installationPath"
-        import_module = "Import-Module (Join-Path \$VsInstallPath 'Common7\\Tools\\Microsoft.VisualStudio.DevShell.dll')"
-        enter_vsdevshell = "Enter-VsDevShell -VsInstallPath \$VsInstallPath -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'"
+        rust_path = "\\$RustPath = Join-Path \\$Env:HOME \\.cargo\\bin"
+        git_path = "\\$GitPath = Join-Path \\$Env:ProgramFiles \\Git\\cmd"
+        env_path_git = "\\$Env:Path += \\$GitPath + \';\'"
+        env_path_rust = "\\$Env:Path += \\$RustPath + \';\'"
+        vs_install_path = "\\$VsInstallPath = &(Join-Path \\${Env:ProgramFiles(x86)} '\\Microsoft Visual Studio\\Installer\\vswhere.exe') -latest -property installationPath"
+        import_module = "Import-Module (Join-Path \\$VsInstallPath 'Common7\\Tools\\Microsoft.VisualStudio.DevShell.dll')"
+        enter_vsdevshell = "Enter-VsDevShell -VsInstallPath \\$VsInstallPath -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'"
 
         env_cmd = " ; ".join([rust_path, git_path, env_path_git, env_path_rust, vs_install_path,
                               import_module, enter_vsdevshell])

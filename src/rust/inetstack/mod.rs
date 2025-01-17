@@ -36,8 +36,6 @@ use ::std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::timer;
-
 //======================================================================================================================
 // Exports
 //======================================================================================================================
@@ -282,8 +280,6 @@ impl NetworkTransport for SharedInetStack {
         buf: &mut DemiBuffer,
         addr: Option<SocketAddr>,
     ) -> Result<(), Fail> {
-        timer!("inetstack::push");
-
         self.layer4_endpoint.push(sd, buf, addr).await
     }
 

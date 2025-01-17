@@ -16,7 +16,6 @@ all: all-examples
 	copy /Y $(BUILD_DIR)\examples\tcp-ping-pong.exe $(BINDIR)\examples\rust\tcp-ping-pong.exe
 
 all-examples:
-	@echo "$(CARGO) build --examples $(CARGO_FEATURES) $(CARGO_FLAGS)"
 	$(CARGO) build --examples $(CARGO_FEATURES) $(CARGO_FLAGS)
 
 clean:

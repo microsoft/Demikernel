@@ -65,10 +65,8 @@ pub struct ProgramArguments {
 /// Associate functions for Program Arguments
 impl ProgramArguments {
     /// Parses the program arguments from the command line interface.
-    pub fn new(app_name: &'static str, app_author: &'static str, app_about: &'static str) -> Result<Self> {
+    pub fn new(app_name: &'static str) -> Result<Self> {
         let matches: ArgMatches = Command::new(app_name)
-            .author(app_author)
-            .about(app_about)
             .arg(
                 Arg::new("addr")
                     .long("address")
@@ -256,11 +254,7 @@ fn start_client_thread(
 //======================================================================================================================
 
 fn main() -> Result<()> {
-    let args: ProgramArguments = ProgramArguments::new(
-        "tcp-echo",
-        "Pedro Henrique Penna <ppenna@microsoft.com>",
-        "Echoes TCP packets.",
-    )?;
+    let args: ProgramArguments = ProgramArguments::new("tcp-echo")?;
 
     let libos_name: LibOSName = match LibOSName::from_env() {
         Ok(libos_name) => libos_name.into(),
