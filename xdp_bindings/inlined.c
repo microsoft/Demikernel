@@ -80,6 +80,31 @@ VOID *
 _XskRingGetElement(
     _In_ const XSK_RING *Ring,
     _In_ UINT32 Index
-    ) {
+    )
+{
     return XskRingGetElement(Ring, Index);
-    }
+}
+
+BOOLEAN
+_XskRingProducerNeedPoke(
+    _In_ const XSK_RING *Ring
+    )
+{
+    return XskRingProducerNeedPoke(Ring);
+}
+
+BOOLEAN
+_XskRingError(
+    _In_ const XSK_RING *Ring
+    )
+{
+    return XskRingError(Ring);
+}
+
+UINT32
+_XskRingGetFlags(
+    _In_ const XSK_RING *Ring
+    )
+{
+    return XskRingGetFlags(Ring);
+}
